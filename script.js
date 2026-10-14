@@ -266,7 +266,7 @@ async function addGuests(){
   const kisandukuAina = document.getElementById('guestAina');
   const aina = kisandukuAina ? kisandukuAina.value : 'single';
 
-  // Njia ya kumfikia mgeni: qr au namba
+  // Njia ya kumfikia mgeni: qr (WhatsApp) au namba (SMS)
   const kisandukuNjia = document.getElementById('guestNjia');
   const njia = kisandukuNjia ? kisandukuNjia.value : 'qr';
 
@@ -283,24 +283,28 @@ async function addGuests(){
   const guestsRef = db.collection('events').doc(activeEventId).collection('guests');
 
   // Namba zilizokwisha kutumika kwenye tukio hili (ili zisijirudie)
+  // Sasa kila mgeni anapata namba, kwa hiyo tunasoma zilizopo kila mara
   const zilizotumika = new Set();
-  if(njia === 'namba'){
-    try{
-      const snapZilizopo = await guestsRef.get();
-      snapZilizopo.forEach(d => {
-        const n = d.data().namba;
-        if(n) zilizotumika.add(n);
-      });
-    }catch(err){
-      console.error(err);
-      countTag.textContent = 'Hitilafu kusoma namba zilizopo: ' + err.message;
-      return;
-    }
+  try{
+    const snapZilizopo = await guestsRef.get();
+    snapZilizopo.forEach(d => {
+      const n = d.data().namba;
+      if(n) zilizotumika.add(n);
+    });
+  }catch(err){
+    console.error(err);
+    countTag.textContent = 'Hitilafu kusoma namba zilizopo: ' + err.message;
+    return;
   }
 
   parsedGuests.forEach(g => {
     const guestId = `${activeEventData.code}-${randomCode(6)}`;
     const ref = guestsRef.doc(guestId);
+
+    // Kila mgeni anapata namba ya kipekee (code ya SMS)
+    let namba;
+    do { namba = randomNamba(4); } while(zilizotumika.has(namba));
+    zilizotumika.add(namba);
 
     const data = {
       name: g.name,
@@ -308,17 +312,10 @@ async function addGuests(){
       paid: amelipaMwanzo,
       aina: aina,
       njia: njia,
+      namba: namba,
       attended: false,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-
-    // Kwa wageni wa "Namba tu": tengeneza namba ya herufi 4 (herufi + namba) isiyojirudia
-    if(njia === 'namba'){
-      let namba;
-      do { namba = randomNamba(4); } while(zilizotumika.has(namba));
-      zilizotumika.add(namba);
-      data.namba = namba;
-    }
 
     batch.set(ref, data);
   });
@@ -354,22 +351,21 @@ function renderGuestCard(eventId, guestId, data){
   const qrPayload = `${eventId}::${guestId}`;
   const cardId = `qr_${guestId}`;
   const ainaMaandishi = data.aina === 'double' ? 'DOUBLE' : 'SINGLE';
-  const ninamba = data.njia === 'namba' && data.namba;
 
-  // Juu ya kadi: QR kwa wageni wa kawaida, namba kubwa kwa wa simu za button
-  const juuYaKadi = ninamba
-    ? `<div id="${cardId}" style="text-align:center;padding:26px 8px;font-size:38px;font-weight:700;letter-spacing:6px;font-family:monospace;">${escapeHtml(data.namba)}</div>`
-    : `<div class="qr-box" id="${cardId}"></div>`;
+  // Code ya mgeni (kwa SMS), inaonekana chini ya QR
+  const nambaHtml = data.namba
+    ? `<div style="text-align:center;font-size:26px;font-weight:700;letter-spacing:5px;font-family:monospace;margin:8px 0;">${escapeHtml(data.namba)}</div>`
+    : '';
 
-  // Kitufe cha kwanza: Nakili Namba au Pakua QR
-  const kitufeCha1 = ninamba
+  const kitufeNamba = data.namba
     ? `<button class="dl" onclick="copyNamba('${data.namba}')">Nakili Namba</button>`
-    : `<button class="dl" onclick="downloadQR('${eventId}','${guestId}','${sanitizeFilename(data.name)}')">Pakua QR</button>`;
+    : '';
 
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
-    ${juuYaKadi}
+    <div class="qr-box" id="${cardId}"></div>
+    ${nambaHtml}
     <div class="g-name">${escapeHtml(data.name)}</div>
     <div class="g-id">${guestId}${data.phone ? ' · ' + escapeHtml(data.phone) : ''}</div>
     <div class="badges">
@@ -382,23 +378,22 @@ function renderGuestCard(eventId, guestId, data){
       <span class="badge">${ainaMaandishi}</span>
     </div>
     <div class="card-actions">
-      ${kitufeCha1}
+      <button class="dl" onclick="downloadQR('${eventId}','${guestId}','${sanitizeFilename(data.name)}')">Pakua QR</button>
+      ${kitufeNamba}
       <button class="dl del" onclick="deleteGuest('${eventId}','${guestId}')">Futa</button>
     </div>
   `;
   grid.appendChild(card);
 
-  // Tengeneza QR kwa wageni wa kawaida tu
-  if(!ninamba){
-    new QRCode(document.getElementById(cardId), {
-      text: qrPayload,
-      width: 150,
-      height: 150,
-      colorDark: "#0a2540",
-      colorLight: "#f5f0e6",
-      correctLevel: QRCode.CorrectLevel.L // kiwango cha chini = vitone vikubwa, rahisi kusoma
-    });
-  }
+  // QR inatengenezwa kwa kila mgeni
+  new QRCode(document.getElementById(cardId), {
+    text: qrPayload,
+    width: 150,
+    height: 150,
+    colorDark: "#0a2540",
+    colorLight: "#f5f0e6",
+    correctLevel: QRCode.CorrectLevel.L // kiwango cha chini = vitone vikubwa, rahisi kusoma
+  });
 }
 
 async function togglePaid(eventId, guestId, currentValue){
@@ -461,8 +456,8 @@ function downloadQR(eventId, guestId, filename){
   document.body.removeChild(temp);
 }
 
-// ============ EXCEL YA NAMBA ============
-// Pakua Excel ya wageni wa "Namba tu" wa tukio lililochaguliwa
+// ============ EXCEL YA WAGENI WOTE ============
+// Pakua Excel ya wageni WOTE wa tukio lililochaguliwa
 // Safu: jina | namba ya simu | kodi
 async function downloadExcelNamba(){
   if(!activeEventId || !activeEventData){
@@ -473,11 +468,10 @@ async function downloadExcelNamba(){
   try{
     const snap = await db.collection('events').doc(activeEventId)
       .collection('guests')
-      .where('njia', '==', 'namba')
       .get();
 
     if(snap.empty){
-      alert('Hakuna wageni wa "Namba tu" kwenye tukio hili.');
+      alert('Hakuna wageni kwenye tukio hili.');
       return;
     }
 
@@ -503,9 +497,9 @@ async function downloadExcelNamba(){
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 10 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Namba');
+    XLSX.utils.book_append_sheet(wb, ws, 'Wageni');
 
-    XLSX.writeFile(wb, `Namba_${sanitizeFilename(activeEventData.name)}.xlsx`);
+    XLSX.writeFile(wb, `Wageni_${sanitizeFilename(activeEventData.name)}.xlsx`);
   }catch(err){
     console.error(err);
     alert('Imeshindikana kutengeneza Excel: ' + err.message);
