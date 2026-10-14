@@ -396,7 +396,7 @@ function renderGuestCard(eventId, guestId, data){
       height: 150,
       colorDark: "#0a2540",
       colorLight: "#f5f0e6",
-      correctLevel: QRCode.CorrectLevel.M
+      correctLevel: QRCode.CorrectLevel.L // kiwango cha chini = vitone vikubwa, rahisi kusoma
     });
   }
 }
@@ -421,10 +421,10 @@ async function deleteGuest(eventId, guestId){
   }
 }
 
-// Pakua QR: kubwa (pikseli 900) na mpaka mweupe kuzunguka
+// Pakua QR: kubwa na mpaka mweupe mpana kuzunguka (rahisi kusoma kwa kamera dhaifu)
 function downloadQR(eventId, guestId, filename){
-  const ukubwaQR = 700;   // ukubwa wa QR yenyewe
-  const mpaka = 100;      // mpaka mweupe kuzunguka
+  const ukubwaQR = 800;   // ukubwa wa QR yenyewe
+  const mpaka = 120;      // mpaka mweupe kuzunguka
   const jumla = ukubwaQR + mpaka * 2;
 
   // QR kubwa ya muda, haionekani kwenye ukurasa
@@ -439,7 +439,7 @@ function downloadQR(eventId, guestId, filename){
     height: ukubwaQR,
     colorDark: "#000000",
     colorLight: "#ffffff",
-    correctLevel: QRCode.CorrectLevel.M
+    correctLevel: QRCode.CorrectLevel.L // kiwango cha chini = vitone vikubwa, rahisi kusoma
   });
 
   const qrCanvas = temp.querySelector('canvas');
