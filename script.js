@@ -25,6 +25,29 @@ function randomCode(len){
   return out;
 }
 
+// Namba ya getini: mchanganyiko wa herufi na namba (angalau herufi 1 na namba 1)
+// Haina herufi/namba zinazochanganya: O, I, L, 0, 1
+function randomNamba(len){
+  const herufi = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+  const namba = '23456789';
+  const zote = herufi + namba;
+  const pick = (s) => s[Math.floor(Math.random() * s.length)];
+
+  const chars = [];
+  chars.push(pick(herufi)); // herufi 1 hakika
+  chars.push(pick(namba));  // namba 1 hakika
+  for(let i = 2; i < len; i++){
+    chars.push(pick(zote));
+  }
+
+  // Changanya mpangilio ili herufi/namba zisiwe na nafasi maalum
+  for(let i = chars.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
 function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = str;
@@ -42,12 +65,23 @@ function futaFomuYaTukio(){
   document.getElementById('eventVenue').value = '';
 }
 
+// Nakili namba ya mgeni
+function copyNamba(namba){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(namba)
+      .then(() => alert('Namba ' + namba + ' imenakiliwa.'))
+      .catch(() => prompt('Nakili namba hii:', namba));
+  }else{
+    prompt('Nakili namba hii:', namba);
+  }
+}
+
 // ============ EVENTS ============
 async function loadEvents(){
   const select = document.getElementById('selectEvent');
   try{
     const snap = await db.collection('events').orderBy('createdAt', 'desc').get();
-    select.innerHTML = '<option value="">— Select Event —</option>';
+    select.innerHTML = '<option value="">— Chagua tukio —</option>';
     snap.forEach(doc => {
       const d = doc.data();
       const opt = document.createElement('option');
@@ -119,16 +153,16 @@ function startEditEvent(){
   document.getElementById('eventDate').value = activeEventData.date || '';
   document.getElementById('eventVenue').value = activeEventData.venue || '';
 
-  document.getElementById('eventSaveBtn').textContent = 'Save Changes';
+  document.getElementById('eventSaveBtn').textContent = 'Hifadhi Mabadiliko';
   document.getElementById('eventCancelBtn').style.display = 'inline-block';
   document.getElementById('eventStatusMsg').textContent =
-    'Unahariri: ' + (activeEventData.name || '') + '. Badilisha kisha bonyeza Save Changes.';
+    'Unahariri: ' + (activeEventData.name || '') + '. Badilisha kisha bonyeza Hifadhi Mabadiliko.';
 }
 
 function cancelEditEvent(){
   editingEventId = null;
   futaFomuYaTukio();
-  document.getElementById('eventSaveBtn').textContent = 'Create New Event';
+  document.getElementById('eventSaveBtn').textContent = 'Unda Tukio Jipya';
   document.getElementById('eventCancelBtn').style.display = 'none';
   document.getElementById('eventStatusMsg').textContent = '';
 }
@@ -232,6 +266,10 @@ async function addGuests(){
   const kisandukuAina = document.getElementById('guestAina');
   const aina = kisandukuAina ? kisandukuAina.value : 'single';
 
+  // Njia ya kumfikia mgeni: qr au namba
+  const kisandukuNjia = document.getElementById('guestNjia');
+  const njia = kisandukuNjia ? kisandukuNjia.value : 'qr';
+
   // Parse kila mstari kuwa {name, phone}
   const parsedGuests = lines.map(line => {
     const parts = line.split(',').map(p => p.trim());
@@ -239,22 +277,50 @@ async function addGuests(){
   }).filter(g => g.name.length > 0);
 
   const countTag = document.getElementById('guestCountTag');
-  countTag.textContent = 'Inaongeza wageni na kutengeneza QR...';
+  countTag.textContent = 'Inaongeza wageni...';
 
   const batch = db.batch();
   const guestsRef = db.collection('events').doc(activeEventId).collection('guests');
 
+  // Namba zilizokwisha kutumika kwenye tukio hili (ili zisijirudie)
+  const zilizotumika = new Set();
+  if(njia === 'namba'){
+    try{
+      const snapZilizopo = await guestsRef.get();
+      snapZilizopo.forEach(d => {
+        const n = d.data().namba;
+        if(n) zilizotumika.add(n);
+      });
+    }catch(err){
+      console.error(err);
+      countTag.textContent = 'Hitilafu kusoma namba zilizopo: ' + err.message;
+      return;
+    }
+  }
+
   parsedGuests.forEach(g => {
     const guestId = `${activeEventData.code}-${randomCode(6)}`;
     const ref = guestsRef.doc(guestId);
-    batch.set(ref, {
+
+    const data = {
       name: g.name,
       phone: g.phone,
       paid: amelipaMwanzo,
       aina: aina,
+      njia: njia,
       attended: false,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    };
+
+    // Kwa wageni wa "Namba tu": tengeneza namba ya herufi 4 (herufi + namba) isiyojirudia
+    if(njia === 'namba'){
+      let namba;
+      do { namba = randomNamba(4); } while(zilizotumika.has(namba));
+      zilizotumika.add(namba);
+      data.namba = namba;
+    }
+
+    batch.set(ref, data);
   });
 
   try{
@@ -288,11 +354,22 @@ function renderGuestCard(eventId, guestId, data){
   const qrPayload = `${eventId}::${guestId}`;
   const cardId = `qr_${guestId}`;
   const ainaMaandishi = data.aina === 'double' ? 'DOUBLE' : 'SINGLE';
+  const ninamba = data.njia === 'namba' && data.namba;
+
+  // Juu ya kadi: QR kwa wageni wa kawaida, namba kubwa kwa wa simu za button
+  const juuYaKadi = ninamba
+    ? `<div id="${cardId}" style="text-align:center;padding:26px 8px;font-size:38px;font-weight:700;letter-spacing:6px;font-family:monospace;">${escapeHtml(data.namba)}</div>`
+    : `<div class="qr-box" id="${cardId}"></div>`;
+
+  // Kitufe cha kwanza: Nakili Namba au Pakua QR
+  const kitufeCha1 = ninamba
+    ? `<button class="dl" onclick="copyNamba('${data.namba}')">Nakili Namba</button>`
+    : `<button class="dl" onclick="downloadQR('${eventId}','${guestId}','${sanitizeFilename(data.name)}')">Pakua QR</button>`;
 
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
-    <div class="qr-box" id="${cardId}"></div>
+    ${juuYaKadi}
     <div class="g-name">${escapeHtml(data.name)}</div>
     <div class="g-id">${guestId}${data.phone ? ' · ' + escapeHtml(data.phone) : ''}</div>
     <div class="badges">
@@ -305,20 +382,23 @@ function renderGuestCard(eventId, guestId, data){
       <span class="badge">${ainaMaandishi}</span>
     </div>
     <div class="card-actions">
-      <button class="dl" onclick="downloadQR('${eventId}','${guestId}','${sanitizeFilename(data.name)}')">Pakua QR</button>
+      ${kitufeCha1}
       <button class="dl del" onclick="deleteGuest('${eventId}','${guestId}')">Futa</button>
     </div>
   `;
   grid.appendChild(card);
 
-  new QRCode(document.getElementById(cardId), {
-    text: qrPayload,
-    width: 150,
-    height: 150,
-    colorDark: "#0a2540",
-    colorLight: "#f5f0e6",
-    correctLevel: QRCode.CorrectLevel.M
-  });
+  // Tengeneza QR kwa wageni wa kawaida tu
+  if(!ninamba){
+    new QRCode(document.getElementById(cardId), {
+      text: qrPayload,
+      width: 150,
+      height: 150,
+      colorDark: "#0a2540",
+      colorLight: "#f5f0e6",
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }
 }
 
 async function togglePaid(eventId, guestId, currentValue){
@@ -379,6 +459,57 @@ function downloadQR(eventId, guestId, filename){
   link.click();
 
   document.body.removeChild(temp);
+}
+
+// ============ EXCEL YA NAMBA ============
+// Pakua Excel ya wageni wa "Namba tu" wa tukio lililochaguliwa
+// Safu: jina | namba ya simu | kodi
+async function downloadExcelNamba(){
+  if(!activeEventId || !activeEventData){
+    alert('Chagua tukio kwanza.');
+    return;
+  }
+
+  try{
+    const snap = await db.collection('events').doc(activeEventId)
+      .collection('guests')
+      .where('njia', '==', 'namba')
+      .get();
+
+    if(snap.empty){
+      alert('Hakuna wageni wa "Namba tu" kwenye tukio hili.');
+      return;
+    }
+
+    // Panga kwa mpangilio waliongezwa
+    const wageni = [];
+    snap.forEach(doc => wageni.push(doc.data()));
+    wageni.sort((a, b) => {
+      const ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      const tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+      return ta - tb;
+    });
+
+    // Safu ya kwanza ni vichwa vya habari; simu zinahifadhiwa kama maandishi
+    const rows = [['jina', 'namba ya simu', 'kodi']];
+    wageni.forEach(g => {
+      rows.push([
+        String(g.name || ''),
+        String(g.phone || ''),
+        String(g.namba || '')
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Namba');
+
+    XLSX.writeFile(wb, `Namba_${sanitizeFilename(activeEventData.name)}.xlsx`);
+  }catch(err){
+    console.error(err);
+    alert('Imeshindikana kutengeneza Excel: ' + err.message);
+  }
 }
 
 // ============ EVENT LISTENERS ============
