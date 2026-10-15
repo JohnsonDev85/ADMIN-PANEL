@@ -1,457 +1,515 @@
-const kitufeAnza = document.getElementById("anza");
-const kisanduku = document.getElementById("jibu");
-const jinaMgeni = document.getElementById("jinaMgeni");
-const hali = document.getElementById("hali");
-
-// Urefu wa namba ya getini (herufi). Ukibadilisha kwenye Admin Panel, badilisha hapa pia.
-const UREFU_WA_NAMBA = 4;
-
-let anaangalia = false;
-let kameraImewaka = false;
-let scanner = null;
-let db = null;
-let kidokezoTimer = null;
-
-// Matukio yanayotumika kukagua kwa namba (yanatafutwa yenyewe)
-let matukioYaKukagua = [];
-let anakaguaNamba = false;
-
-// darasa: imelipwa | haijalipwa | ameshaingia | haijulikani
-function onyeshaJibu(darasa, jina, maneno) {
-  kisanduku.className = darasa;
-  kisanduku.style.display = "block";
-  jinaMgeni.textContent = jina;
-  hali.textContent = maneno;
-  try {
-    kisanduku.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  } catch (e) {}
-}
-
-window.onerror = function (ujumbe) {
-  onyeshaJibu("haijulikani", "Kosa la JS", ujumbe);
+// ============ FIREBASE CONFIG ============
+const firebaseConfig = {
+  apiKey: "AIzaSyBhh3nIzAWyvT47HQ-hh6umjqoCMYBI1Lk",
+  authDomain: "johcards-2db9b.firebaseapp.com",
+  projectId: "johcards-2db9b",
+  storageBucket: "johcards-2db9b.firebasestorage.app",
+  messagingSenderId: "955656442066",
+  appId: "1:955656442066:web:3f0d0335191d67eac61d0b"
 };
 
-try {
-  const firebaseConfig = {
-    apiKey: "AIzaSyBhh3nIzAWyvT47HQ-hh6umjqoCMYBI1Lk",
-    authDomain: "johcards-2db9b.firebaseapp.com",
-    projectId: "johcards-2db9b",
-    storageBucket: "johcards-2db9b.firebasestorage.app",
-    messagingSenderId: "955656442066",
-    appId: "1:955656442066:web:3f0d0335191d67eac61d0b"
-  };
-  firebase.initializeApp(firebaseConfig);
-  db = firebase.firestore();
-} catch (error) {
-  onyeshaJibu("haijulikani", "Firebase haijapakia", error.message);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ============ STATE ============
+let activeEventId = null;
+let activeEventData = null;
+let guestsUnsubscribe = null;
+let editingEventId = null; // si null tunapohariri tukio
+
+// ============ HELPERS ============
+function randomCode(len){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for(let i=0;i<len;i++){ out += chars[Math.floor(Math.random()*chars.length)]; }
+  return out;
 }
 
-// ============ MLIO NA MTETEMO ============
-let sautiCtx = null;
-function piga(vizuri) {
-  try {
-    if (!sautiCtx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) sautiCtx = new AC();
+// Namba ya getini: mchanganyiko wa herufi na namba (angalau herufi 1 na namba 1)
+// Haina herufi/namba zinazochanganya: O, I, L, 0, 1
+function randomNamba(len){
+  const herufi = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+  const namba = '23456789';
+  const zote = herufi + namba;
+  const pick = (s) => s[Math.floor(Math.random() * s.length)];
+
+  const chars = [];
+  chars.push(pick(herufi)); // herufi 1 hakika
+  chars.push(pick(namba));  // namba 1 hakika
+  for(let i = 2; i < len; i++){
+    chars.push(pick(zote));
+  }
+
+  // Changanya mpangilio ili herufi/namba zisiwe na nafasi maalum
+  for(let i = chars.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function sanitizeFilename(name){
+  return name.replace(/[^a-z0-9\-_]+/gi, '_');
+}
+
+function futaFomuYaTukio(){
+  document.getElementById('eventName').value = '';
+  document.getElementById('eventCode').value = '';
+  document.getElementById('eventDate').value = '';
+  document.getElementById('eventVenue').value = '';
+}
+
+// Nakili namba ya mgeni
+function copyNamba(namba){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(namba)
+      .then(() => alert('Namba ' + namba + ' imenakiliwa.'))
+      .catch(() => prompt('Nakili namba hii:', namba));
+  }else{
+    prompt('Nakili namba hii:', namba);
+  }
+}
+
+// ============ EVENTS ============
+async function loadEvents(){
+  const select = document.getElementById('selectEvent');
+  try{
+    const snap = await db.collection('events').orderBy('createdAt', 'desc').get();
+    select.innerHTML = '<option value="">— Chagua tukio —</option>';
+    snap.forEach(doc => {
+      const d = doc.data();
+      const opt = document.createElement('option');
+      opt.value = doc.id;
+      opt.textContent = `${d.name} (${d.code})`;
+      select.appendChild(opt);
+    });
+  }catch(err){
+    console.error('Imeshindikana kupakia matukio:', err);
+    document.getElementById('eventStatusMsg').textContent = 'Hitilafu kupakia matukio.';
+  }
+}
+
+// Unda tukio jipya AU hifadhi mabadiliko ya tukio linalohaririwa
+async function saveEvent(){
+  const name = document.getElementById('eventName').value.trim();
+  const code = document.getElementById('eventCode').value.trim().toUpperCase().replace(/\s+/g,'');
+  const date = document.getElementById('eventDate').value;
+  const venue = document.getElementById('eventVenue').value.trim();
+  const msg = document.getElementById('eventStatusMsg');
+
+  if(!name || !code){
+    msg.textContent = 'Jaza jina la tukio na kodi fupi kwanza.';
+    return;
+  }
+
+  // ----- Hali ya kuhariri -----
+  if(editingEventId){
+    const id = editingEventId;
+    msg.textContent = 'Inahifadhi mabadiliko...';
+    try{
+      await db.collection('events').doc(id).update({ name, code, date, venue });
+      cancelEditEvent();
+      await loadEvents();
+      document.getElementById('selectEvent').value = id;
+      await onEventSelected(id);
+      msg.textContent = 'Mabadiliko yamehifadhiwa!';
+    }catch(err){
+      console.error(err);
+      msg.textContent = 'Hitilafu: ' + err.message;
     }
-    if (sautiCtx) {
-      if (sautiCtx.state === "suspended") sautiCtx.resume();
-      const o = sautiCtx.createOscillator();
-      const g = sautiCtx.createGain();
-      o.connect(g);
-      g.connect(sautiCtx.destination);
-      o.frequency.value = vizuri ? 1200 : 300;
-      g.gain.value = 0.15;
-      o.start();
-      o.stop(sautiCtx.currentTime + (vizuri ? 0.12 : 0.35));
+    return;
+  }
+
+  // ----- Hali ya kuunda tukio jipya -----
+  msg.textContent = 'Inaunda tukio...';
+  try{
+    const docRef = await db.collection('events').add({
+      name, code, date, venue,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    msg.textContent = 'Tukio limeundwa!';
+    futaFomuYaTukio();
+    await loadEvents();
+    document.getElementById('selectEvent').value = docRef.id;
+    onEventSelected(docRef.id);
+  }catch(err){
+    console.error(err);
+    msg.textContent = 'Hitilafu: ' + err.message;
+  }
+}
+
+function startEditEvent(){
+  if(!activeEventId || !activeEventData) return;
+
+  editingEventId = activeEventId;
+  document.getElementById('eventName').value = activeEventData.name || '';
+  document.getElementById('eventCode').value = activeEventData.code || '';
+  document.getElementById('eventDate').value = activeEventData.date || '';
+  document.getElementById('eventVenue').value = activeEventData.venue || '';
+
+  document.getElementById('eventSaveBtn').textContent = 'Hifadhi Mabadiliko';
+  document.getElementById('eventCancelBtn').style.display = 'inline-block';
+  document.getElementById('eventStatusMsg').textContent =
+    'Unahariri: ' + (activeEventData.name || '') + '. Badilisha kisha bonyeza Hifadhi Mabadiliko.';
+}
+
+function cancelEditEvent(){
+  editingEventId = null;
+  futaFomuYaTukio();
+  document.getElementById('eventSaveBtn').textContent = 'Unda Tukio Jipya';
+  document.getElementById('eventCancelBtn').style.display = 'none';
+  document.getElementById('eventStatusMsg').textContent = '';
+}
+
+async function deleteEvent(){
+  if(!activeEventId || !activeEventData) return;
+
+  const eventId = activeEventId;
+  const jina = activeEventData.name;
+  const msg = document.getElementById('eventStatusMsg');
+
+  if(!confirm('Una uhakika unataka kufuta tukio "' + jina + '" pamoja na wageni wake wote? Hili haliwezi kurudishwa.')) return;
+
+  msg.textContent = 'Inafuta tukio na wageni wake...';
+
+  // Simamisha orodha ya moja kwa moja wakati wa kufuta
+  if(guestsUnsubscribe) guestsUnsubscribe();
+
+  try{
+    // Futa wageni wote kwa vipande (Firestore haifuti subcollection yenyewe)
+    const guestsRef = db.collection('events').doc(eventId).collection('guests');
+    while(true){
+      const snap = await guestsRef.limit(400).get();
+      if(snap.empty) break;
+      const batch = db.batch();
+      snap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
     }
-  } catch (e) {}
-  try {
-    if (navigator.vibrate) navigator.vibrate(vizuri ? 60 : [120, 60, 120]);
-  } catch (e) {}
+
+    // Kisha futa tukio lenyewe
+    await db.collection('events').doc(eventId).delete();
+
+    if(editingEventId === eventId) cancelEditEvent();
+    await loadEvents();
+    document.getElementById('selectEvent').value = '';
+    await onEventSelected('');
+    msg.textContent = 'Tukio "' + jina + '" limefutwa.';
+  }catch(err){
+    console.error(err);
+    msg.textContent = 'Hitilafu wakati wa kufuta: ' + err.message;
+    // Rudisha orodha ya moja kwa moja kama kufuta kumeshindwa
+    if(activeEventId) listenToGuests(activeEventId);
+  }
 }
 
-// Maandishi ya SINGLE / DOUBLE
-function maandishiYaAina(mgeni) {
-  return mgeni.aina === "double" ? "DOUBLE (watu 2)" : "SINGLE (mtu 1)";
+async function onEventSelected(eventId){
+  if(editingEventId && editingEventId !== eventId) cancelEditEvent();
+
+  activeEventId = eventId;
+  if(!eventId){
+    activeEventData = null;
+    document.getElementById('eventTools').style.display = 'none';
+    document.getElementById('guestsPanel').style.display = 'none';
+    document.getElementById('listSection').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'block';
+    if(guestsUnsubscribe) guestsUnsubscribe();
+    return;
+  }
+
+  try{
+    const doc = await db.collection('events').doc(eventId).get();
+    if(!doc.exists){
+      alert('Tukio hili halipatikani.');
+      return;
+    }
+    activeEventData = doc.data();
+
+    document.getElementById('eventTools').style.display = 'flex';
+    document.getElementById('guestsPanel').style.display = 'block';
+    document.getElementById('listSection').style.display = 'block';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('activeEventTag').textContent =
+      `Tukio hai: ${activeEventData.name} (${activeEventData.code})`;
+
+    listenToGuests(eventId);
+  }catch(err){
+    console.error('onEventSelected error:', err);
+    alert('Imeshindikana kupakia tukio: ' + err.message);
+  }
 }
 
-// ============ UKAGUZI WA MGENI (QR na namba) ============
-async function kaguaMgeni(ref) {
-  try {
-    // Transaction: inazuia watu wawili kuingia kwa kadi moja kwa wakati mmoja
-    const matokeo = await db.runTransaction(async function (t) {
-      const doc = await t.get(ref);
+// ============ GUESTS ============
+async function addGuests(){
+  if(!activeEventId){
+    alert('Chagua au unda tukio kwanza.');
+    return;
+  }
+  const rawLines = document.getElementById('guestNames').value;
+  const lines = rawLines.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-      if (!doc.exists) {
-        return { aina: "haijulikani" };
-      }
+  if(lines.length === 0){
+    alert('Andika jina la mgeni angalau mmoja.');
+    return;
+  }
 
-      const mgeni = doc.data();
+  // Hali ya malipo ya mwanzo
+  const kisanduku = document.getElementById('guestPaid');
+  const amelipaMwanzo = kisanduku ? kisanduku.value === 'true' : false;
 
-      // Kwanza: ameshaingia? (hii inafanya kazi kwa QR na kwa namba)
-      if (mgeni.attended === true) {
-        return { aina: "ameshaingia", jina: mgeni.name };
-      }
+  // Aina ya kadi: single au double
+  const kisandukuAina = document.getElementById('guestAina');
+  const aina = kisandukuAina ? kisandukuAina.value : 'single';
 
-      // Kisha: amelipa?
-      if (mgeni.paid !== true) {
-        return { aina: "haijalipwa", jina: mgeni.name };
-      }
+  // Njia ya kumfikia mgeni: qr (WhatsApp) au namba (SMS)
+  const kisandukuNjia = document.getElementById('guestNjia');
+  const njia = kisandukuNjia ? kisandukuNjia.value : 'qr';
 
-      t.update(ref, {
-        attended: true,
-        attendedAt: firebase.firestore.FieldValue.serverTimestamp()
+  // Parse kila mstari kuwa {name, phone}
+  const parsedGuests = lines.map(line => {
+    const parts = line.split(',').map(p => p.trim());
+    return { name: parts[0] || '', phone: parts[1] || '' };
+  }).filter(g => g.name.length > 0);
+
+  const countTag = document.getElementById('guestCountTag');
+  countTag.textContent = 'Inaongeza wageni...';
+
+  const batch = db.batch();
+  const guestsRef = db.collection('events').doc(activeEventId).collection('guests');
+
+  // Namba zilizokwisha kutumika kwenye tukio hili (ili zisijirudie)
+  // Sasa kila mgeni anapata namba, kwa hiyo tunasoma zilizopo kila mara
+  const zilizotumika = new Set();
+  try{
+    const snapZilizopo = await guestsRef.get();
+    snapZilizopo.forEach(d => {
+      const n = d.data().namba;
+      if(n) zilizotumika.add(n);
+    });
+  }catch(err){
+    console.error(err);
+    countTag.textContent = 'Hitilafu kusoma namba zilizopo: ' + err.message;
+    return;
+  }
+
+  parsedGuests.forEach(g => {
+    const guestId = `${activeEventData.code}-${randomCode(6)}`;
+    const ref = guestsRef.doc(guestId);
+
+    // Kila mgeni anapata namba ya kipekee (code ya SMS)
+    let namba;
+    do { namba = randomNamba(4); } while(zilizotumika.has(namba));
+    zilizotumika.add(namba);
+
+    const data = {
+      name: g.name,
+      phone: g.phone,
+      paid: amelipaMwanzo,
+      aina: aina,
+      njia: njia,
+      namba: namba,
+      attended: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    batch.set(ref, data);
+  });
+
+  try{
+    await batch.commit();
+    document.getElementById('guestNames').value = '';
+    countTag.textContent = `Wageni ${parsedGuests.length} wameongezwa.`;
+  }catch(err){
+    console.error(err);
+    countTag.textContent = 'Hitilafu: ' + err.message;
+  }
+}
+
+function listenToGuests(eventId){
+  if(guestsUnsubscribe) guestsUnsubscribe();
+
+  const grid = document.getElementById('guestGrid');
+  guestsUnsubscribe = db.collection('events').doc(eventId).collection('guests')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      grid.innerHTML = '';
+      snap.forEach(doc => {
+        renderGuestCard(eventId, doc.id, doc.data());
       });
-      return { aina: "karibu", jina: mgeni.name, ainaKadi: maandishiYaAina(mgeni) };
+    }, err => {
+      console.error('Guests listener error:', err);
     });
+}
 
-    if (matokeo.aina === "haijulikani") {
-      onyeshaJibu("haijulikani", "", "KADI HAIJULIKANI");
-      piga(false);
-    } else if (matokeo.aina === "haijalipwa") {
-      onyeshaJibu("haijalipwa", matokeo.jina, "HAJALIPA ✘");
-      piga(false);
-    } else if (matokeo.aina === "ameshaingia") {
-      onyeshaJibu("ameshaingia", matokeo.jina, "ALISHAINGIA TAYARI");
-      piga(false);
-    } else {
-      onyeshaJibu("imelipwa", matokeo.jina, "AMELIPA ✔ KARIBU · " + matokeo.ainaKadi);
-      piga(true);
-    }
-  } catch (error) {
-    onyeshaJibu("haijulikani", "Kosa", error.message);
-    piga(false);
+function renderGuestCard(eventId, guestId, data){
+  const grid = document.getElementById('guestGrid');
+  const qrPayload = `${eventId}::${guestId}`;
+  const cardId = `qr_${guestId}`;
+  const ainaMaandishi = data.aina === 'double' ? 'DOUBLE' : 'SINGLE';
+
+  // Code ya mgeni (kwa SMS), inaonekana chini ya QR
+  const nambaHtml = data.namba
+    ? `<div style="text-align:center;font-size:26px;font-weight:700;letter-spacing:5px;font-family:monospace;margin:8px 0;">${escapeHtml(data.namba)}</div>`
+    : '';
+
+  const kitufeNamba = data.namba
+    ? `<button class="dl" onclick="copyNamba('${data.namba}')">Nakili Namba</button>`
+    : '';
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="qr-box" id="${cardId}"></div>
+    ${nambaHtml}
+    <div class="g-name">${escapeHtml(data.name)}</div>
+    <div class="g-id">${guestId}${data.phone ? ' · ' + escapeHtml(data.phone) : ''}</div>
+    <div class="badges">
+      <span class="badge ${data.paid ? 'paid-yes' : 'paid-no'}" onclick="togglePaid('${eventId}','${guestId}', ${data.paid})">
+        ${data.paid ? '✓ Amelipa' : '✕ Hajalipa'}
+      </span>
+      <span class="badge ${data.attended ? 'att-yes' : 'att-no'}">
+        ${data.attended ? '✓ Amehudhuria' : 'Bado'}
+      </span>
+      <span class="badge">${ainaMaandishi}</span>
+    </div>
+    <div class="card-actions">
+      <button class="dl" onclick="downloadQR('${eventId}','${guestId}','${sanitizeFilename(data.name)}')">Pakua QR</button>
+      ${kitufeNamba}
+      <button class="dl del" onclick="deleteGuest('${eventId}','${guestId}')">Futa</button>
+    </div>
+  `;
+  grid.appendChild(card);
+
+  // QR inatengenezwa kwa kila mgeni
+  new QRCode(document.getElementById(cardId), {
+    text: qrPayload,
+    width: 150,
+    height: 150,
+    colorDark: "#0a2540",
+    colorLight: "#f5f0e6",
+    correctLevel: QRCode.CorrectLevel.L // kiwango cha chini = vitone vikubwa, rahisi kusoma
+  });
+}
+
+async function togglePaid(eventId, guestId, currentValue){
+  try{
+    await db.collection('events').doc(eventId).collection('guests').doc(guestId)
+      .update({ paid: !currentValue });
+  }catch(err){
+    console.error(err);
+    alert('Imeshindikana kubadili hali ya malipo: ' + err.message);
   }
 }
 
-// Ukaguzi kwa QR
-async function angaliaMgeni(maandishi) {
-  const sehemu = maandishi.split("::");
+async function deleteGuest(eventId, guestId){
+  if(!confirm('Una uhakika unataka kufuta mgeni huyu?')) return;
+  try{
+    await db.collection('events').doc(eventId).collection('guests').doc(guestId).delete();
+  }catch(err){
+    console.error(err);
+    alert('Imeshindikana kufuta: ' + err.message);
+  }
+}
 
-  if (sehemu.length !== 2) {
-    onyeshaJibu("haijulikani", "", "KADI HAIJULIKANI");
-    piga(false);
+// Pakua QR: kubwa na mpaka mweupe mpana kuzunguka (rahisi kusoma kwa kamera dhaifu)
+function downloadQR(eventId, guestId, filename){
+  const ukubwaQR = 800;   // ukubwa wa QR yenyewe
+  const mpaka = 120;      // mpaka mweupe kuzunguka
+  const jumla = ukubwaQR + mpaka * 2;
+
+  // QR kubwa ya muda, haionekani kwenye ukurasa
+  const temp = document.createElement('div');
+  temp.style.position = 'absolute';
+  temp.style.left = '-9999px';
+  document.body.appendChild(temp);
+
+  new QRCode(temp, {
+    text: `${eventId}::${guestId}`,
+    width: ukubwaQR,
+    height: ukubwaQR,
+    colorDark: "#000000",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.L // kiwango cha chini = vitone vikubwa, rahisi kusoma
+  });
+
+  const qrCanvas = temp.querySelector('canvas');
+
+  // Picha ya mwisho: mraba mweupe wenye QR katikati
+  const canvas = document.createElement('canvas');
+  canvas.width = jumla;
+  canvas.height = jumla;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, jumla, jumla);
+  ctx.drawImage(qrCanvas, mpaka, mpaka, ukubwaQR, ukubwaQR);
+
+  const link = document.createElement('a');
+  link.download = `${filename || 'mgeni'}_QR.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+
+  document.body.removeChild(temp);
+}
+
+// ============ EXCEL YA WAGENI WOTE ============
+// Pakua Excel ya wageni WOTE wa tukio lililochaguliwa
+// Safu: jina | namba ya simu | kodi
+async function downloadExcelNamba(){
+  if(!activeEventId || !activeEventData){
+    alert('Chagua tukio kwanza.');
     return;
   }
 
-  const ref = db
-    .collection("events").doc(sehemu[0])
-    .collection("guests").doc(sehemu[1]);
+  try{
+    const snap = await db.collection('events').doc(activeEventId)
+      .collection('guests')
+      .get();
 
-  await kaguaMgeni(ref);
-}
-
-// ============ KUTAFUTA TUKIO LA KUKAGUA KWA NAMBA ============
-function tareheYaLeo() {
-  const d = new Date();
-  return (
-    d.getFullYear() + "-" +
-    String(d.getMonth() + 1).padStart(2, "0") + "-" +
-    String(d.getDate()).padStart(2, "0")
-  );
-}
-
-// Matukio ya leo; kama hakuna, tukio jipya zaidi
-async function tafutaMatukio() {
-  const lebo = document.getElementById("lebo");
-  try {
-    const snap = await db.collection("events").orderBy("createdAt", "desc").get();
-    const wote = [];
-    snap.forEach(function (doc) {
-      wote.push({ id: doc.id, ...doc.data() });
-    });
-
-    const leo = tareheYaLeo();
-    let waLeo = wote.filter(function (e) { return e.date === leo; });
-    if (waLeo.length === 0 && wote.length > 0) {
-      waLeo = [wote[0]];
-    }
-
-    matukioYaKukagua = waLeo;
-    if (lebo) {
-      lebo.textContent = waLeo.length
-        ? "Tukio: " + waLeo.map(function (e) { return e.name; }).join(" / ")
-        : "Hakuna tukio";
-    }
-  } catch (error) {
-    console.error(error);
-    if (lebo) lebo.textContent = "Imeshindikana kupakia tukio";
-  }
-}
-
-// ============ UKAGUZI KWA NAMBA ============
-async function angaliaKwaNamba() {
-  if (anakaguaNamba) return;
-
-  const kisandukuNamba = document.getElementById("nambaYaMgeni");
-  const namba = kisandukuNamba.value.trim().toUpperCase().replace(/\s+/g, "");
-
-  if (!db) {
-    onyeshaJibu("haijulikani", "Kosa", "Firebase haijapakia");
-    return;
-  }
-  if (!namba) {
-    onyeshaJibu("haijulikani", "", "ANDIKA NAMBA KWANZA");
-    return;
-  }
-
-  anakaguaNamba = true;
-  try {
-    if (matukioYaKukagua.length === 0) {
-      await tafutaMatukio();
-    }
-    if (matukioYaKukagua.length === 0) {
-      onyeshaJibu("haijulikani", "", "HAKUNA TUKIO");
-      piga(false);
+    if(snap.empty){
+      alert('Hakuna wageni kwenye tukio hili.');
       return;
     }
 
-    // Tafuta kwenye matukio yote yanayotumika kwa wakati mmoja
-    const majibu = await Promise.all(
-      matukioYaKukagua.map(function (e) {
-        return db
-          .collection("events").doc(e.id)
-          .collection("guests")
-          .where("namba", "==", namba)
-          .limit(1)
-          .get();
-      })
-    );
-
-    const zilizopatikana = [];
-    majibu.forEach(function (snap) {
-      if (!snap.empty) zilizopatikana.push(snap.docs[0].ref);
+    // Panga kwa mpangilio waliongezwa
+    const wageni = [];
+    snap.forEach(doc => wageni.push(doc.data()));
+    wageni.sort((a, b) => {
+      const ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      const tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+      return ta - tb;
     });
 
-    if (zilizopatikana.length === 0) {
-      onyeshaJibu("haijulikani", "", "NAMBA HAIJULIKANI");
-      piga(false);
-    } else if (zilizopatikana.length > 1) {
-      onyeshaJibu("haijulikani", "", "NAMBA IPO KWENYE MATUKIO ZAIDI YA MOJA");
-      piga(false);
-    } else {
-      await kaguaMgeni(zilizopatikana[0]);
-    }
-  } catch (error) {
-    onyeshaJibu("haijulikani", "Kosa", error.message);
-    piga(false);
-  } finally {
-    anakaguaNamba = false;
-    kisandukuNamba.value = "";
-    kisandukuNamba.focus();
-  }
-}
-
-// Unganisha sehemu ya "kagua kwa namba" (HTML yake iko kwenye index.html)
-function andaaNjiaYaNamba() {
-  const kisandukuNamba = document.getElementById("nambaYaMgeni");
-  const kitufeKagua = document.getElementById("kagua");
-  if (!kisandukuNamba || !kitufeKagua) return;
-
-  kisandukuNamba.maxLength = UREFU_WA_NAMBA;
-
-  kitufeKagua.addEventListener("click", angaliaKwaNamba);
-
-  kisandukuNamba.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") angaliaKwaNamba();
-  });
-
-  // Ikifika herufi zote, kagua yenyewe (hakuna kubonyeza kitufe)
-  kisandukuNamba.addEventListener("input", function () {
-    kisandukuNamba.value = kisandukuNamba.value.toUpperCase().replace(/\s+/g, "");
-    if (kisandukuNamba.value.length >= UREFU_WA_NAMBA) {
-      angaliaKwaNamba();
-    }
-  });
-
-  if (db) tafutaMatukio();
-}
-
-// ============ KIDOKEZO KAMA QR HAISOMEKI ============
-function futaKidokezo() {
-  if (kidokezoTimer) {
-    clearTimeout(kidokezoTimer);
-    kidokezoTimer = null;
-  }
-  const k = document.getElementById("kidokezo");
-  if (k) k.classList.remove("onekana");
-}
-
-function anzaKidokezo() {
-  futaKidokezo();
-  kidokezoTimer = setTimeout(function () {
-    const k = document.getElementById("kidokezo");
-    if (!k) return;
-    k.textContent =
-      "QR haisomeki? Sogeza simu mbali au karibu, ongeza mwanga, au washa tochi.";
-    k.classList.add("onekana");
-  }, 10000);
-}
-
-// ============ TOCHI NA ZOOM (kama simu inaruhusu) ============
-function onyeshaVifaaVyaKamera() {
-  const eneo = document.getElementById("vifaaVyaKamera");
-  if (!eneo) return;
-  eneo.innerHTML = "";
-
-  let uwezo = null;
-  try {
-    uwezo = scanner.getRunningTrackCameraCapabilities();
-  } catch (e) {
-    return; // simu haiungi mkono
-  }
-  if (!uwezo) return;
-
-  // Tochi
-  try {
-    const tochi = uwezo.torchFeature();
-    if (tochi && tochi.isSupported()) {
-      let imewaka = false;
-      const kitufe = document.createElement("button");
-      kitufe.type = "button";
-      kitufe.textContent = "🔦 Washa Tochi";
-      kitufe.addEventListener("click", async function () {
-        try {
-          await tochi.apply(!imewaka);
-          imewaka = !imewaka;
-          kitufe.textContent = imewaka ? "🔦 Zima Tochi" : "🔦 Washa Tochi";
-        } catch (e) {
-          console.warn("Tochi imeshindikana:", e);
-        }
-      });
-      eneo.appendChild(kitufe);
-    }
-  } catch (e) {}
-
-  // Zoom
-  try {
-    const zum = uwezo.zoomFeature();
-    if (zum && zum.isSupported()) {
-      const lebo = document.createElement("label");
-      lebo.textContent = "Zoom ";
-      const slider = document.createElement("input");
-      slider.type = "range";
-      slider.min = zum.min();
-      slider.max = zum.max();
-      slider.step = zum.step();
-      slider.value = zum.value();
-      slider.addEventListener("input", function () {
-        zum.apply(parseFloat(slider.value)).catch(function () {});
-      });
-      lebo.appendChild(slider);
-      eneo.appendChild(lebo);
-    }
-  } catch (e) {}
-}
-
-// ============ KUSCAN QR ============
-// Scanner inasimama baada ya kila mgeni; bonyeza "mwingine" kuendelea
-function scanImefanikiwa(maandishi) {
-  if (anaangalia) return;
-  anaangalia = true;
-  futaKidokezo();
-  angaliaMgeni(maandishi);
-}
-
-// Mipangilio ya kamera inayofaa simu zote, hata za kawaida
-const mipangilioYaKamera = {
-  fps: 10, // simu dhaifu hazishindwi kuchakata fremu nyingi
-  disableFlip: true,
-  qrbox: function (upana, urefu) {
-    // Soma karibu fremu nzima, QR hahitaji kuwa katikati kabisa
-    const ndogo = Math.min(upana, urefu);
-    const ukubwa = Math.max(50, Math.floor(ndogo * 0.9));
-    return { width: ukubwa, height: ukubwa };
-  }
-};
-
-// Jaribu njia kadhaa za kufungua kamera ili ifanye kazi kwenye simu yoyote
-async function fungulaKamera() {
-  // 1. Kamera ya nyuma (njia ya kawaida)
-  try {
-    await scanner.start({ facingMode: "environment" }, mipangilioYaKamera, scanImefanikiwa);
-    return;
-  } catch (e1) {
-    console.warn("Kamera ya nyuma imeshindikana, najaribu nyingine:", e1);
-  }
-
-  // 2. Tafuta kamera zote za simu, chagua ya nyuma (au ya mwisho kwenye orodha)
-  try {
-    const kamera = await Html5Qrcode.getCameras();
-    if (kamera && kamera.length) {
-      const nyuma =
-        kamera.find(function (k) { return /back|rear|environment|nyuma/i.test(k.label); }) ||
-        kamera[kamera.length - 1];
-      await scanner.start(nyuma.id, mipangilioYaKamera, scanImefanikiwa);
-      return;
-    }
-  } catch (e2) {
-    console.warn("Orodha ya kamera imeshindikana, najaribu ya mbele:", e2);
-  }
-
-  // 3. Kamera ya mbele kama ya mwisho
-  await scanner.start({ facingMode: "user" }, mipangilioYaKamera, scanImefanikiwa);
-}
-
-kitufeAnza.addEventListener("click", function () {
-  if (typeof Html5Qrcode === "undefined") {
-    onyeshaJibu("haijulikani", "Kosa", "Maktaba ya scanner haijapakia");
-    return;
-  }
-
-  // Kamera tayari imewaka: usifungue mara mbili
-  if (kameraImewaka) return;
-
-  if (!scanner) {
-    const mipangilio = { verbose: false };
-    if (typeof Html5QrcodeSupportedFormats !== "undefined") {
-      mipangilio.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
-    }
-    scanner = new Html5Qrcode("reader", mipangilio);
-  }
-
-  // Washa sauti (inahitaji kubonyeza kitufe mara ya kwanza)
-  piga(true);
-
-  onyeshaJibu("haijulikani", "Subiri...", "Inafungua kamera");
-
-  fungulaKamera()
-    .then(function () {
-      kameraImewaka = true;
-      kisanduku.style.display = "none";
-
-      // Omba focus ya kuendelea (kamera zisizo na focus nzuri)
-      try {
-        if (typeof scanner.applyVideoConstraints === "function") {
-          scanner
-            .applyVideoConstraints({ advanced: [{ focusMode: "continuous" }] })
-            .catch(function () {});
-        }
-      } catch (e) {}
-
-      onyeshaVifaaVyaKamera();
-      anzaKidokezo();
-    })
-    .catch(function (error) {
-      const maelezo = String(error);
-      if (/NotAllowed|Permission|denied/i.test(maelezo)) {
-        onyeshaJibu(
-          "haijulikani",
-          "Kamera imezuiwa",
-          "Ruhusu kamera kwenye browser, kisha bonyeza Anza tena"
-        );
-      } else {
-        onyeshaJibu("haijulikani", "Kamera haijafunguka", maelezo);
-      }
+    // Safu ya kwanza ni vichwa vya habari; simu zinahifadhiwa kama maandishi
+    const rows = [['jina', 'namba ya simu', 'kodi']];
+    wageni.forEach(g => {
+      rows.push([
+        String(g.name || ''),
+        String(g.phone || ''),
+        String(g.namba || '')
+      ]);
     });
-});
 
-document.getElementById("mwingine").addEventListener("click", function () {
-  kisanduku.style.display = "none";
-  anaangalia = false;
-  if (kameraImewaka) anzaKidokezo();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Wageni');
+
+    XLSX.writeFile(wb, `Wageni_${sanitizeFilename(activeEventData.name)}.xlsx`);
+  }catch(err){
+    console.error(err);
+    alert('Imeshindikana kutengeneza Excel: ' + err.message);
+  }
+}
+
+// ============ EVENT LISTENERS ============
+document.getElementById('selectEvent').addEventListener('change', (e) => {
+  onEventSelected(e.target.value);
 });
 
 // ============ INIT ============
-andaaNjiaYaNamba();
+loadEvents();
