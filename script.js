@@ -282,11 +282,11 @@ async function addGuests(){
   const batch = db.batch();
   const guestsRef = db.collection('events').doc(activeEventId).collection('guests');
 
-  // Namba zilizokwisha kutumika kwenye tukio hili (ili zisijirudie)
-  // Sasa kila mgeni anapata namba, kwa hiyo tunasoma zilizopo kila mara
+  // Namba zilizokwisha kutumika kwenye MATUKIO YOTE (ili zisijirudie popote)
+  // collectionGroup('guests') inasoma wageni wa matukio yote kwa mara moja
   const zilizotumika = new Set();
   try{
-    const snapZilizopo = await guestsRef.get();
+    const snapZilizopo = await db.collectionGroup('guests').get();
     snapZilizopo.forEach(d => {
       const n = d.data().namba;
       if(n) zilizotumika.add(n);
@@ -301,7 +301,7 @@ async function addGuests(){
     const guestId = `${activeEventData.code}-${randomCode(6)}`;
     const ref = guestsRef.doc(guestId);
 
-    // Kila mgeni anapata namba ya kipekee (code ya SMS)
+    // Kila mgeni anapata namba ya kipekee kwenye matukio yote (code ya SMS)
     let namba;
     do { namba = randomNamba(4); } while(zilizotumika.has(namba));
     zilizotumika.add(namba);
