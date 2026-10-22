@@ -289,12 +289,20 @@ function somaFailiLaWageni(input){
       }
 
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      // raw:true = tunapata thamani halisi (namba kamili, si E+11)
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
 
       const wageni = [];
       rows.forEach((row, i) => {
         const jina = String(row[0] == null ? '' : row[0]).trim();
-        const simu = safishaNambaYaSimu(row[1]);
+
+        // Namba ya simu ikitoka Excel kama namba, igeuze kuwa maandishi kamili (bila E+11)
+        let simuMbichi = row[1];
+        if(typeof simuMbichi === 'number'){
+          simuMbichi = simuMbichi.toFixed(0);
+        }
+        const simu = safishaNambaYaSimu(simuMbichi);
+
         if(!jina) return;
 
         // Ruka mstari wa kichwa cha habari (jina, namba ya simu)
