@@ -151,12 +151,23 @@
         <button class="btn" style="background:#b3261e;color:#fff;" onclick="deleteAllGuests()">Futa Wageni Wote</button>
       </div>
 
+      <!-- Kisanduku cha kuthibitisha kufuta wote -->
+      <div id="deleteAllBox" style="display:none;margin-bottom:16px;padding:14px;border:1px solid #b3261e;border-radius:12px;">
+        <div id="deleteAllText" style="margin-bottom:10px;"></div>
+        <input type="text" id="deleteAllInput" placeholder="Andika FUTA hapa" autocomplete="off" />
+        <div class="actions" style="margin-top:10px;">
+          <button class="btn" style="background:#b3261e;color:#fff;" onclick="thibitishaFutaWote()">Thibitisha Kufuta</button>
+          <button class="btn" onclick="ghairiFutaWote()">Ghairi</button>
+        </div>
+      </div>
+      <div class="status-msg" id="deleteAllStatus" style="margin-bottom:16px;"></div>
+
       <div class="grid" id="guestGrid"></div>
     </div>
 
     <div class="empty" id="emptyState">Chagua au unda tukio kuanza kuongeza wageni.</div>
   </div>
 
-<script src="script.js?v=3"></script>
+<script src="script.js?v=4"></script>
 </body>
 </html>
