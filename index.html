@@ -82,9 +82,30 @@
 
       <div class="field-row">
         <div class="field">
+          <label for="guestInputMode">Njia ya Kuongeza Wageni</label>
+          <select id="guestInputMode" onchange="badilishaNjiaYaKuingiza()">
+            <option value="andika">Andika majina mwenyewe</option>
+            <option value="faili">Pakia faili (Excel au CSV)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Njia 1: Kuandika -->
+      <div class="field-row" id="njiaAndika">
+        <div class="field">
           <label for="guestNames">Majina na Namba za Wageni</label>
           <textarea id="guestNames" placeholder="Jina, Namba ya Simu - moja kwa kila mstari, mfano:&#10;Amina Juma, 0712345678&#10;Baraka Mushi, 0755123456"></textarea>
           <div class="hint">Andika: Jina, Namba (ukitenganisha kwa comma). Namba itakusaidia kumtafuta mgeni na kutuma kadi kwa WhatsApp.</div>
+        </div>
+      </div>
+
+      <!-- Njia 2: Kupakia faili -->
+      <div class="field-row" id="njiaFaili" style="display:none;">
+        <div class="field">
+          <label for="guestFile">Chagua Faili (.xlsx, .xls au .csv)</label>
+          <input type="file" id="guestFile" accept=".xlsx,.xls,.csv" onchange="somaFailiLaWageni(this)" />
+          <div class="hint">Safu ya kwanza iwe jina, ya pili iwe namba ya simu. Kichwa cha habari (jina, namba ya simu) kinaruhusiwa.</div>
+          <div id="failiPreview" style="margin-top:10px;font-size:14px;"></div>
         </div>
       </div>
 
