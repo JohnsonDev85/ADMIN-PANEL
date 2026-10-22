@@ -282,7 +282,6 @@ function somaFailiLaWageni(input){
     try{
       let wb;
       if(isCsv){
-        // raw:true inahifadhi namba za simu kama maandishi (sifuri ya mwanzo inabaki)
         wb = XLSX.read(e.target.result, { type: 'string', raw: true });
       }else{
         wb = XLSX.read(e.target.result, { type: 'array' });
@@ -293,16 +292,10 @@ function somaFailiLaWageni(input){
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
 
       const wageni = [];
+      let zenyeE = 0; // idadi ya namba zilizoandikwa kama E+11 kwenye faili lenyewe
+
       rows.forEach((row, i) => {
         const jina = String(row[0] == null ? '' : row[0]).trim();
-
-        // Namba ya simu ikitoka Excel kama namba, igeuze kuwa maandishi kamili (bila E+11)
-        let simuMbichi = row[1];
-        if(typeof simuMbichi === 'number'){
-          simuMbichi = simuMbichi.toFixed(0);
-        }
-        const simu = safishaNambaYaSimu(simuMbichi);
-
         if(!jina) return;
 
         // Ruka mstari wa kichwa cha habari (jina, namba ya simu)
@@ -310,7 +303,18 @@ function somaFailiLaWageni(input){
           const j = jina.toLowerCase();
           if(['jina', 'majina', 'name', 'names'].includes(j)) return;
         }
-        wageni.push({ name: jina, phone: simu });
+
+        // Namba ya simu: ikiwa namba, igeuze kuwa maandishi kamili (bila E+11)
+        let simuMbichi = row[1];
+        if(typeof simuMbichi === 'number'){
+          simuMbichi = simuMbichi.toFixed(0);
+        }else if(typeof simuMbichi === 'string' && /^\d+(\.\d+)?e\+?\d+$/i.test(simuMbichi.trim())){
+          // Faili lenyewe lina maandishi ya E+11: tarakimu zimeshapotea
+          zenyeE++;
+          simuMbichi = Number(simuMbichi.trim()).toFixed(0);
+        }
+
+        wageni.push({ name: jina, phone: safishaNambaYaSimu(simuMbichi) });
       });
 
       wageniWaFaili = wageni;
@@ -325,9 +329,16 @@ function somaFailiLaWageni(input){
       ).join('');
       const zaidi = wageni.length > 5 ? `<div>...na wengine ${wageni.length - 5}</div>` : '';
 
+      const onyo = zenyeE > 0
+        ? `<div style="margin:8px 0;padding:8px 10px;border:1px solid #b3261e;border-radius:8px;color:#ffb4ab;">` +
+          `Tahadhari: namba ${zenyeE} kwenye faili zimeandikwa kama "E+11". Tarakimu za mwisho zimepotea ndani ya faili lenyewe. ` +
+          `Fungua Excel, chagua safu ya namba, weka format ya Text, kisha andika namba upya.</div>`
+        : '';
+
       preview.innerHTML =
         `<strong>Wageni ${wageni.length} wamepatikana.</strong>` +
         `<ul style="margin:6px 0 6px 18px;padding:0;">${mfano}</ul>${zaidi}` +
+        onyo +
         `<div style="margin-top:6px;">Bonyeza "Ongeza Wageni + Tengeneza QR" kuwahifadhi.</div>`;
     }catch(err){
       console.error(err);
@@ -392,7 +403,6 @@ async function addGuests(){
   countTag.textContent = 'Inaongeza wageni...';
 
   // Namba zilizokwisha kutumika kwenye MATUKIO YOTE (ili zisijirudie popote)
-  // collectionGroup('guests') inasoma wageni wa matukio yote kwa mara moja
   const zilizotumika = new Set();
   try{
     const snapZilizopo = await db.collectionGroup('guests').get();
@@ -409,8 +419,7 @@ async function addGuests(){
   const guestsRef = db.collection('events').doc(activeEventId).collection('guests');
 
   try{
-    // Firestore inaruhusu hadi miandiko 500 kwa batch moja,
-    // kwa hiyo tunahifadhi kwa vipande vya wageni 400
+    // Tunahifadhi kwa vipande vya wageni 400 (Firestore inaruhusu hadi 500 kwa batch)
     const ukubwaWaKipande = 400;
     for(let i = 0; i < parsedGuests.length; i += ukubwaWaKipande){
       const kipande = parsedGuests.slice(i, i + ukubwaWaKipande);
@@ -451,6 +460,64 @@ async function addGuests(){
   }catch(err){
     console.error(err);
     countTag.textContent = 'Hitilafu: ' + err.message;
+  }
+}
+
+// Futa wageni WOTE (na QR zao) wa tukio lililochaguliwa
+async function deleteAllGuests(){
+  if(!activeEventId || !activeEventData){
+    alert('Chagua tukio kwanza.');
+    return;
+  }
+
+  const eventId = activeEventId;
+  const jina = activeEventData.name;
+  const countTag = document.getElementById('guestCountTag');
+  const guestsRef = db.collection('events').doc(eventId).collection('guests');
+
+  try{
+    // Hesabu wageni waliopo kwanza
+    const snapAwali = await guestsRef.get();
+    if(snapAwali.empty){
+      alert('Hakuna wageni kwenye tukio hili.');
+      return;
+    }
+    const idadi = snapAwali.size;
+
+    const jibu = prompt(
+      'Utafuta wageni ' + idadi + ' wa tukio "' + jina + '" pamoja na QR zao zote.\n' +
+      'Hili haliwezi kurudishwa, na kadi ulizokwisha kutuma hazitafanya kazi tena.\n\n' +
+      'Andika neno FUTA kuthibitisha:'
+    );
+    if(jibu === null) return;
+    if(jibu.trim().toUpperCase() !== 'FUTA'){
+      alert('Haukuandika FUTA. Hakuna kilichofutwa.');
+      return;
+    }
+
+    // Simamisha orodha ya moja kwa moja wakati wa kufuta (ili isichore upya mara nyingi)
+    if(guestsUnsubscribe) guestsUnsubscribe();
+    document.getElementById('guestGrid').innerHTML = '';
+    countTag.textContent = 'Inafuta wageni...';
+
+    let zilizofutwa = 0;
+    while(true){
+      const snap = await guestsRef.limit(400).get();
+      if(snap.empty) break;
+      const batch = db.batch();
+      snap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      zilizofutwa += snap.size;
+      countTag.textContent = `Imefuta ${zilizofutwa} kati ya ${idadi}...`;
+    }
+
+    countTag.textContent = `Wageni ${zilizofutwa} wamefutwa.`;
+  }catch(err){
+    console.error(err);
+    countTag.textContent = 'Hitilafu wakati wa kufuta: ' + err.message;
+  }finally{
+    // Rudisha orodha ya moja kwa moja
+    if(activeEventId === eventId) listenToGuests(eventId);
   }
 }
 
