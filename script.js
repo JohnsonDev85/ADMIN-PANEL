@@ -212,6 +212,9 @@ async function deleteEvent(){
 async function onEventSelected(eventId){
   if(editingEventId && editingEventId !== eventId) cancelEditEvent();
 
+  // Ficha kisanduku cha kufuta wote tukio linapobadilika
+  ghairiFutaWote();
+
   activeEventId = eventId;
   if(!eventId){
     activeEventData = null;
@@ -463,43 +466,81 @@ async function addGuests(){
   }
 }
 
-// Futa wageni WOTE (na QR zao) wa tukio lililochaguliwa
+// ============ FUTA WAGENI WOTE ============
+let futaWoteEventId = null;
+let futaWoteIdadi = 0;
+
+// Hatua ya 1: onyesha kisanduku cha kuthibitisha
 async function deleteAllGuests(){
+  const status = document.getElementById('deleteAllStatus');
+
   if(!activeEventId || !activeEventData){
-    alert('Chagua tukio kwanza.');
+    status.textContent = 'Chagua tukio kwanza.';
     return;
   }
 
-  const eventId = activeEventId;
-  const jina = activeEventData.name;
-  const countTag = document.getElementById('guestCountTag');
+  status.textContent = 'Inahesabu wageni...';
+  try{
+    const snap = await db.collection('events').doc(activeEventId)
+      .collection('guests').get();
+
+    if(snap.empty){
+      status.textContent = 'Hakuna wageni kwenye tukio hili.';
+      return;
+    }
+
+    futaWoteEventId = activeEventId;
+    futaWoteIdadi = snap.size;
+
+    document.getElementById('deleteAllText').textContent =
+      'Utafuta wageni ' + futaWoteIdadi + ' wa tukio "' + activeEventData.name +
+      '" pamoja na QR zao zote. Hili haliwezi kurudishwa, na kadi ulizokwisha kutuma hazitafanya kazi tena.';
+    document.getElementById('deleteAllInput').value = '';
+    document.getElementById('deleteAllBox').style.display = 'block';
+    status.textContent = '';
+  }catch(err){
+    console.error(err);
+    status.textContent = 'Hitilafu: ' + err.message;
+  }
+}
+
+function ghairiFutaWote(){
+  const box = document.getElementById('deleteAllBox');
+  const input = document.getElementById('deleteAllInput');
+  const status = document.getElementById('deleteAllStatus');
+  if(box) box.style.display = 'none';
+  if(input) input.value = '';
+  if(status) status.textContent = '';
+  futaWoteEventId = null;
+}
+
+// Hatua ya 2: thibitisha kisha futa
+async function thibitishaFutaWote(){
+  const status = document.getElementById('deleteAllStatus');
+  const jibu = document.getElementById('deleteAllInput').value.trim().toUpperCase();
+
+  if(jibu !== 'FUTA'){
+    status.textContent = 'Andika neno FUTA kwenye kisanduku kuthibitisha.';
+    return;
+  }
+
+  if(!futaWoteEventId || futaWoteEventId !== activeEventId){
+    ghairiFutaWote();
+    status.textContent = 'Tukio limebadilika. Bonyeza "Futa Wageni Wote" tena.';
+    return;
+  }
+
+  const eventId = futaWoteEventId;
+  const idadi = futaWoteIdadi;
   const guestsRef = db.collection('events').doc(eventId).collection('guests');
 
+  // Ficha kisanduku, simamisha orodha ya moja kwa moja wakati wa kufuta
+  document.getElementById('deleteAllBox').style.display = 'none';
+  if(guestsUnsubscribe) guestsUnsubscribe();
+  document.getElementById('guestGrid').innerHTML = '';
+  status.textContent = 'Inafuta wageni...';
+
   try{
-    // Hesabu wageni waliopo kwanza
-    const snapAwali = await guestsRef.get();
-    if(snapAwali.empty){
-      alert('Hakuna wageni kwenye tukio hili.');
-      return;
-    }
-    const idadi = snapAwali.size;
-
-    const jibu = prompt(
-      'Utafuta wageni ' + idadi + ' wa tukio "' + jina + '" pamoja na QR zao zote.\n' +
-      'Hili haliwezi kurudishwa, na kadi ulizokwisha kutuma hazitafanya kazi tena.\n\n' +
-      'Andika neno FUTA kuthibitisha:'
-    );
-    if(jibu === null) return;
-    if(jibu.trim().toUpperCase() !== 'FUTA'){
-      alert('Haukuandika FUTA. Hakuna kilichofutwa.');
-      return;
-    }
-
-    // Simamisha orodha ya moja kwa moja wakati wa kufuta (ili isichore upya mara nyingi)
-    if(guestsUnsubscribe) guestsUnsubscribe();
-    document.getElementById('guestGrid').innerHTML = '';
-    countTag.textContent = 'Inafuta wageni...';
-
     let zilizofutwa = 0;
     while(true){
       const snap = await guestsRef.limit(400).get();
@@ -508,15 +549,14 @@ async function deleteAllGuests(){
       snap.forEach(d => batch.delete(d.ref));
       await batch.commit();
       zilizofutwa += snap.size;
-      countTag.textContent = `Imefuta ${zilizofutwa} kati ya ${idadi}...`;
+      status.textContent = 'Imefuta ' + zilizofutwa + ' kati ya ' + idadi + '...';
     }
-
-    countTag.textContent = `Wageni ${zilizofutwa} wamefutwa.`;
+    status.textContent = 'Wageni ' + zilizofutwa + ' wamefutwa.';
   }catch(err){
     console.error(err);
-    countTag.textContent = 'Hitilafu wakati wa kufuta: ' + err.message;
+    status.textContent = 'Hitilafu wakati wa kufuta: ' + err.message;
   }finally{
-    // Rudisha orodha ya moja kwa moja
+    futaWoteEventId = null;
     if(activeEventId === eventId) listenToGuests(eventId);
   }
 }
