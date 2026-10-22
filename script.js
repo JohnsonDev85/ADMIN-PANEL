@@ -16,6 +16,7 @@ let activeEventId = null;
 let activeEventData = null;
 let guestsUnsubscribe = null;
 let editingEventId = null; // si null tunapohariri tukio
+let wageniWaFaili = [];    // wageni waliosomwa kutoka kwenye faili (Excel/CSV)
 
 // ============ HELPERS ============
 function randomCode(len){
@@ -245,17 +246,126 @@ async function onEventSelected(eventId){
 }
 
 // ============ GUESTS ============
+
+// Badilisha kati ya kuandika na kupakia faili
+function badilishaNjiaYaKuingiza(){
+  const njia = document.getElementById('guestInputMode').value;
+  document.getElementById('njiaAndika').style.display = (njia === 'andika') ? '' : 'none';
+  document.getElementById('njiaFaili').style.display = (njia === 'faili') ? '' : 'none';
+}
+
+// Safisha namba ya simu iliyotoka kwenye faili
+// (Excel mara nyingi huondoa sifuri ya mwanzo, mfano 712345678)
+function safishaNambaYaSimu(raw){
+  let n = String(raw == null ? '' : raw).trim().replace(/[\s\-()]/g, '');
+  if(/^[67]\d{8}$/.test(n)) n = '0' + n;
+  return n;
+}
+
+// Soma faili la CSV au Excel kisha onyesha preview
+function somaFailiLaWageni(input){
+  const preview = document.getElementById('failiPreview');
+  wageniWaFaili = [];
+  preview.innerHTML = '';
+
+  const file = input.files && input.files[0];
+  if(!file) return;
+
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+
+  reader.onerror = () => {
+    preview.textContent = 'Imeshindikana kusoma faili.';
+  };
+
+  reader.onload = (e) => {
+    try{
+      let wb;
+      if(isCsv){
+        // raw:true inahifadhi namba za simu kama maandishi (sifuri ya mwanzo inabaki)
+        wb = XLSX.read(e.target.result, { type: 'string', raw: true });
+      }else{
+        wb = XLSX.read(e.target.result, { type: 'array' });
+      }
+
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+      const wageni = [];
+      rows.forEach((row, i) => {
+        const jina = String(row[0] == null ? '' : row[0]).trim();
+        const simu = safishaNambaYaSimu(row[1]);
+        if(!jina) return;
+
+        // Ruka mstari wa kichwa cha habari (jina, namba ya simu)
+        if(i === 0){
+          const j = jina.toLowerCase();
+          if(['jina', 'majina', 'name', 'names'].includes(j)) return;
+        }
+        wageni.push({ name: jina, phone: simu });
+      });
+
+      wageniWaFaili = wageni;
+
+      if(wageni.length === 0){
+        preview.textContent = 'Hakuna wageni waliopatikana kwenye faili hili.';
+        return;
+      }
+
+      const mfano = wageni.slice(0, 5).map(g =>
+        `<li>${escapeHtml(g.name)}${g.phone ? ' · ' + escapeHtml(g.phone) : ''}</li>`
+      ).join('');
+      const zaidi = wageni.length > 5 ? `<div>...na wengine ${wageni.length - 5}</div>` : '';
+
+      preview.innerHTML =
+        `<strong>Wageni ${wageni.length} wamepatikana.</strong>` +
+        `<ul style="margin:6px 0 6px 18px;padding:0;">${mfano}</ul>${zaidi}` +
+        `<div style="margin-top:6px;">Bonyeza "Ongeza Wageni + Tengeneza QR" kuwahifadhi.</div>`;
+    }catch(err){
+      console.error(err);
+      preview.textContent = 'Faili halisomeki: ' + err.message;
+    }
+  };
+
+  if(isCsv){
+    reader.readAsText(file);
+  }else{
+    reader.readAsArrayBuffer(file);
+  }
+}
+
 async function addGuests(){
   if(!activeEventId){
     alert('Chagua au unda tukio kwanza.');
     return;
   }
-  const rawLines = document.getElementById('guestNames').value;
-  const lines = rawLines.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  if(lines.length === 0){
-    alert('Andika jina la mgeni angalau mmoja.');
-    return;
+  const modeEl = document.getElementById('guestInputMode');
+  const mode = modeEl ? modeEl.value : 'andika';
+
+  // Pata orodha ya wageni kutoka kwenye faili AU kwenye sanduku la maandishi
+  let parsedGuests = [];
+
+  if(mode === 'faili'){
+    if(wageniWaFaili.length === 0){
+      alert('Chagua faili lenye wageni kwanza.');
+      return;
+    }
+    parsedGuests = wageniWaFaili.slice();
+  }else{
+    const rawLines = document.getElementById('guestNames').value;
+    const lines = rawLines.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    if(lines.length === 0){
+      alert('Andika jina la mgeni angalau mmoja.');
+      return;
+    }
+
+    // Parse kila mstari kuwa {name, phone}
+    parsedGuests = lines.map(line => {
+      const parts = line.split(',').map(p => p.trim());
+      return { name: parts[0] || '', phone: parts[1] || '' };
+    }).filter(g => g.name.length > 0);
   }
 
   // Hali ya malipo ya mwanzo
@@ -270,17 +380,8 @@ async function addGuests(){
   const kisandukuNjia = document.getElementById('guestNjia');
   const njia = kisandukuNjia ? kisandukuNjia.value : 'qr';
 
-  // Parse kila mstari kuwa {name, phone}
-  const parsedGuests = lines.map(line => {
-    const parts = line.split(',').map(p => p.trim());
-    return { name: parts[0] || '', phone: parts[1] || '' };
-  }).filter(g => g.name.length > 0);
-
   const countTag = document.getElementById('guestCountTag');
   countTag.textContent = 'Inaongeza wageni...';
-
-  const batch = db.batch();
-  const guestsRef = db.collection('events').doc(activeEventId).collection('guests');
 
   // Namba zilizokwisha kutumika kwenye MATUKIO YOTE (ili zisijirudie popote)
   // collectionGroup('guests') inasoma wageni wa matukio yote kwa mara moja
@@ -297,32 +398,47 @@ async function addGuests(){
     return;
   }
 
-  parsedGuests.forEach(g => {
-    const guestId = `${activeEventData.code}-${randomCode(6)}`;
-    const ref = guestsRef.doc(guestId);
-
-    // Kila mgeni anapata namba ya kipekee kwenye matukio yote (code ya SMS)
-    let namba;
-    do { namba = randomNamba(4); } while(zilizotumika.has(namba));
-    zilizotumika.add(namba);
-
-    const data = {
-      name: g.name,
-      phone: g.phone,
-      paid: amelipaMwanzo,
-      aina: aina,
-      njia: njia,
-      namba: namba,
-      attended: false,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-
-    batch.set(ref, data);
-  });
+  const guestsRef = db.collection('events').doc(activeEventId).collection('guests');
 
   try{
-    await batch.commit();
+    // Firestore inaruhusu hadi miandiko 500 kwa batch moja,
+    // kwa hiyo tunahifadhi kwa vipande vya wageni 400
+    const ukubwaWaKipande = 400;
+    for(let i = 0; i < parsedGuests.length; i += ukubwaWaKipande){
+      const kipande = parsedGuests.slice(i, i + ukubwaWaKipande);
+      const batch = db.batch();
+
+      kipande.forEach(g => {
+        const guestId = `${activeEventData.code}-${randomCode(6)}`;
+        const ref = guestsRef.doc(guestId);
+
+        // Kila mgeni anapata namba ya kipekee kwenye matukio yote (code ya SMS)
+        let namba;
+        do { namba = randomNamba(4); } while(zilizotumika.has(namba));
+        zilizotumika.add(namba);
+
+        batch.set(ref, {
+          name: g.name,
+          phone: g.phone,
+          paid: amelipaMwanzo,
+          aina: aina,
+          njia: njia,
+          namba: namba,
+          attended: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+
+      await batch.commit();
+    }
+
+    // Safisha fomu baada ya kuhifadhi
     document.getElementById('guestNames').value = '';
+    const faili = document.getElementById('guestFile');
+    if(faili) faili.value = '';
+    wageniWaFaili = [];
+    document.getElementById('failiPreview').innerHTML = '';
+
     countTag.textContent = `Wageni ${parsedGuests.length} wameongezwa.`;
   }catch(err){
     console.error(err);
