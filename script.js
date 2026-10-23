@@ -18,6 +18,15 @@ let guestsUnsubscribe = null;
 let editingEventId = null; // si null tunapohariri tukio
 let wageniWaFaili = [];    // wageni waliosomwa kutoka kwenye faili (Excel/CSV)
 
+// Namba zote zilizokwisha kutumika (zinasomwa mara moja tu, kisha zinakumbukwa)
+let nambaZilizotumikaCache = null;
+
+// Kadi za wageni zilizopo kwenye ukurasa (guestId -> kipengele cha kadi)
+let kadiZaWageni = new Map();
+
+// Mwangalizi wa QR: QR inatengenezwa kadi inapokaribia kuonekana kwenye skrini
+let qrObserver = null;
+
 // ============ HELPERS ============
 function randomCode(len){
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -406,18 +415,24 @@ async function addGuests(){
   countTag.textContent = 'Inaongeza wageni...';
 
   // Namba zilizokwisha kutumika kwenye MATUKIO YOTE (ili zisijirudie popote)
-  const zilizotumika = new Set();
-  try{
-    const snapZilizopo = await db.collectionGroup('guests').get();
-    snapZilizopo.forEach(d => {
-      const n = d.data().namba;
-      if(n) zilizotumika.add(n);
-    });
-  }catch(err){
-    console.error(err);
-    countTag.textContent = 'Hitilafu kusoma namba zilizopo: ' + err.message;
-    return;
+  // Zinasomwa MARA MOJA tu (ukurasa ukifunguliwa), kisha zinakumbukwa
+  if(!nambaZilizotumikaCache){
+    countTag.textContent = 'Inaandaa namba (mara ya kwanza tu)...';
+    try{
+      const set = new Set();
+      const snapZilizopo = await db.collectionGroup('guests').get();
+      snapZilizopo.forEach(d => {
+        const n = d.data().namba;
+        if(n) set.add(n);
+      });
+      nambaZilizotumikaCache = set;
+    }catch(err){
+      console.error(err);
+      countTag.textContent = 'Hitilafu kusoma namba zilizopo: ' + err.message;
+      return;
+    }
   }
+  const zilizotumika = nambaZilizotumikaCache;
 
   const guestsRef = db.collection('events').doc(activeEventId).collection('guests');
 
@@ -450,6 +465,11 @@ async function addGuests(){
       });
 
       await batch.commit();
+
+      if(parsedGuests.length > ukubwaWaKipande){
+        const tayari = Math.min(i + ukubwaWaKipande, parsedGuests.length);
+        countTag.textContent = `Inaongeza ${tayari} kati ya ${parsedGuests.length}...`;
+      }
     }
 
     // Safisha fomu baada ya kuhifadhi
@@ -537,7 +557,7 @@ async function thibitishaFutaWote(){
   // Ficha kisanduku, simamisha orodha ya moja kwa moja wakati wa kufuta
   document.getElementById('deleteAllBox').style.display = 'none';
   if(guestsUnsubscribe) guestsUnsubscribe();
-  document.getElementById('guestGrid').innerHTML = '';
+  futaKadiZote();
   status.textContent = 'Inafuta wageni...';
 
   try{
@@ -561,26 +581,52 @@ async function thibitishaFutaWote(){
   }
 }
 
-function listenToGuests(eventId){
-  if(guestsUnsubscribe) guestsUnsubscribe();
+// ============ ORODHA YA WAGENI (YA HARAKA) ============
 
+// Futa kadi zote kwenye ukurasa na usafishe mwangalizi wa QR
+function futaKadiZote(){
   const grid = document.getElementById('guestGrid');
-  guestsUnsubscribe = db.collection('events').doc(eventId).collection('guests')
-    .orderBy('createdAt', 'desc')
-    .onSnapshot(snap => {
-      grid.innerHTML = '';
-      snap.forEach(doc => {
-        renderGuestCard(eventId, doc.id, doc.data());
-      });
-    }, err => {
-      console.error('Guests listener error:', err);
-    });
+  if(qrObserver){
+    qrObserver.disconnect();
+    qrObserver = null;
+  }
+  kadiZaWageni = new Map();
+  if(grid) grid.innerHTML = '';
 }
 
-function renderGuestCard(eventId, guestId, data){
-  const grid = document.getElementById('guestGrid');
-  const qrPayload = `${eventId}::${guestId}`;
-  const cardId = `qr_${guestId}`;
+// Tengeneza QR ya kisanduku kimoja (mara moja tu)
+function tengenezaQR(box){
+  if(!box || box.dataset.tayari === '1') return;
+  box.dataset.tayari = '1';
+  new QRCode(box, {
+    text: box.dataset.payload,
+    width: 150,
+    height: 150,
+    colorDark: "#0a2540",
+    colorLight: "#f5f0e6",
+    correctLevel: QRCode.CorrectLevel.L // kiwango cha chini = vitone vikubwa, rahisi kusoma
+  });
+}
+
+// Mwangalizi: QR inatengenezwa kadi ikikaribia kuonekana
+function andaaMwangalizi(){
+  if(qrObserver) qrObserver.disconnect();
+  if('IntersectionObserver' in window){
+    qrObserver = new IntersectionObserver((entries) => {
+      entries.forEach(en => {
+        if(en.isIntersecting){
+          tengenezaQR(en.target);
+          qrObserver.unobserve(en.target);
+        }
+      });
+    }, { rootMargin: '400px' });
+  }else{
+    qrObserver = null; // simu ya zamani: QR zitatengenezwa mara moja
+  }
+}
+
+// Jaza sehemu ya chini ya kadi (jina, hali, vitufe). QR haiguswi hapa.
+function jazaMwiliWaKadi(mwili, eventId, guestId, data){
   const ainaMaandishi = data.aina === 'double' ? 'DOUBLE' : 'SINGLE';
 
   // Code ya mgeni (kwa SMS), inaonekana chini ya QR
@@ -592,10 +638,7 @@ function renderGuestCard(eventId, guestId, data){
     ? `<button class="dl" onclick="copyNamba('${data.namba}')">Nakili Namba</button>`
     : '';
 
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.innerHTML = `
-    <div class="qr-box" id="${cardId}"></div>
+  mwili.innerHTML = `
     ${nambaHtml}
     <div class="g-name">${escapeHtml(data.name)}</div>
     <div class="g-id">${guestId}${data.phone ? ' · ' + escapeHtml(data.phone) : ''}</div>
@@ -614,17 +657,90 @@ function renderGuestCard(eventId, guestId, data){
       <button class="dl del" onclick="deleteGuest('${eventId}','${guestId}')">Futa</button>
     </div>
   `;
-  grid.appendChild(card);
+}
 
-  // QR inatengenezwa kwa kila mgeni
-  new QRCode(document.getElementById(cardId), {
-    text: qrPayload,
-    width: 150,
-    height: 150,
-    colorDark: "#0a2540",
-    colorLight: "#f5f0e6",
-    correctLevel: QRCode.CorrectLevel.L // kiwango cha chini = vitone vikubwa, rahisi kusoma
-  });
+// Tengeneza kadi mpya (bila QR bado; QR inakuja kadi ikikaribia skrini)
+function tengenezaKadi(eventId, guestId, data){
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const qrBox = document.createElement('div');
+  qrBox.className = 'qr-box';
+  qrBox.id = 'qr_' + guestId;
+  qrBox.dataset.payload = `${eventId}::${guestId}`;
+  // Nafasi ya QR inabaki wazi hata kabla haijatengenezwa
+  qrBox.style.minWidth = '150px';
+  qrBox.style.minHeight = '150px';
+
+  // Mwili wa kadi: "display: contents" ili muonekano ubaki kama ulivyokuwa
+  const mwili = document.createElement('div');
+  mwili.className = 'card-body';
+  mwili.style.display = 'contents';
+
+  card.appendChild(qrBox);
+  card.appendChild(mwili);
+  jazaMwiliWaKadi(mwili, eventId, guestId, data);
+  return card;
+}
+
+function weka(grid, card, nafasi){
+  const mbele = grid.children[nafasi] || null;
+  grid.insertBefore(card, mbele);
+}
+
+function listenToGuests(eventId){
+  if(guestsUnsubscribe) guestsUnsubscribe();
+
+  futaKadiZote();
+  andaaMwangalizi();
+
+  const grid = document.getElementById('guestGrid');
+  guestsUnsubscribe = db.collection('events').doc(eventId).collection('guests')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      // Tunashughulikia mabadiliko tu (si orodha nzima upya)
+      snap.docChanges().forEach(change => {
+        const id = change.doc.id;
+        const data = change.doc.data();
+
+        if(change.type === 'added'){
+          const card = tengenezaKadi(eventId, id, data);
+          kadiZaWageni.set(id, card);
+          weka(grid, card, change.newIndex);
+
+          const box = card.querySelector('.qr-box');
+          if(qrObserver){
+            qrObserver.observe(box);
+          }else{
+            tengenezaQR(box);
+          }
+
+        }else if(change.type === 'modified'){
+          const card = kadiZaWageni.get(id);
+          if(!card) return;
+
+          // Sasisha maandishi na vitufe tu; QR inabaki kama ilivyo
+          jazaMwiliWaKadi(card.querySelector('.card-body'), eventId, id, data);
+
+          // Kama nafasi imebadilika, hamisha kadi
+          if(change.oldIndex !== change.newIndex){
+            card.remove();
+            weka(grid, card, change.newIndex);
+          }
+
+        }else if(change.type === 'removed'){
+          const card = kadiZaWageni.get(id);
+          if(card){
+            const box = card.querySelector('.qr-box');
+            if(qrObserver && box) qrObserver.unobserve(box);
+            card.remove();
+            kadiZaWageni.delete(id);
+          }
+        }
+      });
+    }, err => {
+      console.error('Guests listener error:', err);
+    });
 }
 
 async function togglePaid(eventId, guestId, currentValue){
