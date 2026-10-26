@@ -24,6 +24,9 @@ let nambaZilizotumikaCache = null;
 // Kadi za wageni zilizopo kwenye ukurasa (guestId -> kipengele cha kadi)
 let kadiZaWageni = new Map();
 
+// Taarifa fupi za wageni kwa hesabu (guestId -> { aina, attended })
+let takwimuZaWageni = new Map();
+
 // Mwangalizi wa QR: QR inatengenezwa kadi inapokaribia kuonekana kwenye skrini
 let qrObserver = null;
 
@@ -583,6 +586,26 @@ async function thibitishaFutaWote(){
 
 // ============ ORODHA YA WAGENI (YA HARAKA) ============
 
+// Sasisha hesabu za wageni (jumla, single, double, waliohudhuria)
+function sasishaTakwimu(){
+  let jumla = 0, single = 0, dbl = 0, wamehudhuria = 0;
+
+  takwimuZaWageni.forEach(g => {
+    jumla++;
+    if(g.aina === 'double') dbl++; else single++;
+    if(g.attended) wamehudhuria++;
+  });
+
+  const weka = (id, thamani) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = String(thamani);
+  };
+  weka('statJumla', jumla);
+  weka('statSingle', single);
+  weka('statDouble', dbl);
+  weka('statAttended', wamehudhuria);
+}
+
 // Futa kadi zote kwenye ukurasa na usafishe mwangalizi wa QR
 function futaKadiZote(){
   const grid = document.getElementById('guestGrid');
@@ -591,6 +614,8 @@ function futaKadiZote(){
     qrObserver = null;
   }
   kadiZaWageni = new Map();
+  takwimuZaWageni = new Map();
+  sasishaTakwimu();
   if(grid) grid.innerHTML = '';
 }
 
@@ -703,6 +728,16 @@ function listenToGuests(eventId){
         const id = change.doc.id;
         const data = change.doc.data();
 
+        // Hesabu za wageni (zinahesabu wageni wote waliopo, wapya na wa zamani)
+        if(change.type === 'removed'){
+          takwimuZaWageni.delete(id);
+        }else{
+          takwimuZaWageni.set(id, {
+            aina: data.aina === 'double' ? 'double' : 'single',
+            attended: data.attended === true
+          });
+        }
+
         if(change.type === 'added'){
           const card = tengenezaKadi(eventId, id, data);
           kadiZaWageni.set(id, card);
@@ -738,6 +773,9 @@ function listenToGuests(eventId){
           }
         }
       });
+
+      // Sasisha hesabu mara moja baada ya mabadiliko yote
+      sasishaTakwimu();
     }, err => {
       console.error('Guests listener error:', err);
     });
