@@ -24,9 +24,6 @@ let nambaZilizotumikaCache = null;
 // Kadi za wageni zilizopo kwenye ukurasa (guestId -> kipengele cha kadi)
 let kadiZaWageni = new Map();
 
-// Taarifa fupi za wageni kwa hesabu (guestId -> { aina, attended })
-let takwimuZaWageni = new Map();
-
 // Mwangalizi wa QR: QR inatengenezwa kadi inapokaribia kuonekana kwenye skrini
 let qrObserver = null;
 
@@ -586,24 +583,28 @@ async function thibitishaFutaWote(){
 
 // ============ ORODHA YA WAGENI (YA HARAKA) ============
 
-// Sasisha hesabu za wageni (jumla, single, double, waliohudhuria)
-function sasishaTakwimu(){
+// Hesabu wageni wote kwenye orodha: jumla, single, double, waliohudhuria
+// docs = orodha nzima ya wageni wa tukio (kutoka Firestore). Bila docs = sifuri.
+function sasishaTakwimu(docs){
   let jumla = 0, single = 0, dbl = 0, wamehudhuria = 0;
 
-  takwimuZaWageni.forEach(g => {
-    jumla++;
-    if(g.aina === 'double') dbl++; else single++;
-    if(g.attended) wamehudhuria++;
-  });
+  if(docs){
+    docs.forEach(d => {
+      const g = d.data();
+      jumla++;
+      if(g.aina === 'double') dbl++; else single++;
+      if(g.attended === true) wamehudhuria++;
+    });
+  }
 
-  const weka = (id, thamani) => {
+  const wekaThamani = (id, thamani) => {
     const el = document.getElementById(id);
     if(el) el.textContent = String(thamani);
   };
-  weka('statJumla', jumla);
-  weka('statSingle', single);
-  weka('statDouble', dbl);
-  weka('statAttended', wamehudhuria);
+  wekaThamani('statJumla', jumla);
+  wekaThamani('statSingle', single);
+  wekaThamani('statDouble', dbl);
+  wekaThamani('statAttended', wamehudhuria);
 }
 
 // Futa kadi zote kwenye ukurasa na usafishe mwangalizi wa QR
@@ -614,7 +615,6 @@ function futaKadiZote(){
     qrObserver = null;
   }
   kadiZaWageni = new Map();
-  takwimuZaWageni = new Map();
   sasishaTakwimu();
   if(grid) grid.innerHTML = '';
 }
@@ -720,23 +720,15 @@ function listenToGuests(eventId){
   andaaMwangalizi();
 
   const grid = document.getElementById('guestGrid');
+  const hitilafuEneo = document.getElementById('deleteAllStatus');
+
   guestsUnsubscribe = db.collection('events').doc(eventId).collection('guests')
     .orderBy('createdAt', 'desc')
     .onSnapshot(snap => {
-      // Tunashughulikia mabadiliko tu (si orodha nzima upya)
+      // Tunashughulikia mabadiliko tu kwa kadi (si orodha nzima upya)
       snap.docChanges().forEach(change => {
         const id = change.doc.id;
         const data = change.doc.data();
-
-        // Hesabu za wageni (zinahesabu wageni wote waliopo, wapya na wa zamani)
-        if(change.type === 'removed'){
-          takwimuZaWageni.delete(id);
-        }else{
-          takwimuZaWageni.set(id, {
-            aina: data.aina === 'double' ? 'double' : 'single',
-            attended: data.attended === true
-          });
-        }
 
         if(change.type === 'added'){
           const card = tengenezaKadi(eventId, id, data);
@@ -774,10 +766,17 @@ function listenToGuests(eventId){
         }
       });
 
-      // Sasisha hesabu mara moja baada ya mabadiliko yote
-      sasishaTakwimu();
+      // Hesabu zinatoka kwenye orodha NZIMA ya wageni (wa zamani na wapya)
+      sasishaTakwimu(snap.docs);
+
+      if(hitilafuEneo && hitilafuEneo.textContent.indexOf('Hitilafu kusoma orodha') === 0){
+        hitilafuEneo.textContent = '';
+      }
     }, err => {
       console.error('Guests listener error:', err);
+      if(hitilafuEneo){
+        hitilafuEneo.textContent = 'Hitilafu kusoma orodha: ' + err.message;
+      }
     });
 }
 
