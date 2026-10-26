@@ -146,6 +146,26 @@
     <div id="listSection" style="display:none;">
       <div class="section-title">3. Orodha ya Wageni <div class="divider"></div></div>
 
+      <!-- Muhtasari wa wageni (unajisasisha wenyewe) -->
+      <div id="guestStats" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+        <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+          <div id="statJumla" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Jumla ya Wageni</div>
+        </div>
+        <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+          <div id="statSingle" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Single</div>
+        </div>
+        <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+          <div id="statDouble" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Double</div>
+        </div>
+        <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+          <div id="statAttended" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Waliohudhuria</div>
+        </div>
+      </div>
+
       <div class="actions" style="margin-bottom:16px;">
         <button class="btn" onclick="downloadExcelNamba()">Pakua Excel ya Namba</button>
         <button class="btn" style="background:#b3261e;color:#fff;" onclick="deleteAllGuests()">Futa Wageni Wote</button>
@@ -168,6 +188,6 @@
     <div class="empty" id="emptyState">Chagua au unda tukio kuanza kuongeza wageni.</div>
   </div>
 
-<script src="script.js?v=4"></script>
+<script src="script.js?v=6"></script>
 </body>
 </html>
