@@ -182,12 +182,22 @@
       </div>
       <div class="status-msg" id="deleteAllStatus" style="margin-bottom:16px;"></div>
 
+      <!-- Tafuta mgeni -->
+      <div class="field-row">
+        <div class="field">
+          <label for="guestSearch">Tafuta Mgeni</label>
+          <input type="text" id="guestSearch" placeholder="Andika jina (mfano: Amina)" autocomplete="off" oninput="ratibishaUtafutaji()" />
+          <div id="searchInfo" style="font-size:13px;opacity:0.85;margin-top:6px;"></div>
+          <button class="btn" id="searchClear" style="display:none;margin-top:8px;" onclick="ufutaUtafutaji()">Futa Utafutaji</button>
+        </div>
+      </div>
+
       <div class="grid" id="guestGrid"></div>
     </div>
 
     <div class="empty" id="emptyState">Chagua au unda tukio kuanza kuongeza wageni.</div>
   </div>
 
-<script src="script.js?v=7"></script>
+<script src="script.js?v=8"></script>
 </body>
 </html>
