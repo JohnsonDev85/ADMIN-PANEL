@@ -27,6 +27,10 @@ let kadiZaWageni = new Map();
 // Mwangalizi wa QR: QR inatengenezwa kadi inapokaribia kuonekana kwenye skrini
 let qrObserver = null;
 
+// Utafutaji wa wageni
+let tafutaManeno = [];     // maneno yanayotafutwa (herufi ndogo)
+let tafutaTimer = null;
+
 // ============ HELPERS ============
 function randomCode(len){
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -223,6 +227,9 @@ async function onEventSelected(eventId){
 
   // Ficha kisanduku cha kufuta wote tukio linapobadilika
   ghairiFutaWote();
+
+  // Futa utafutaji wa tukio lililopita
+  ufutaUtafutaji(true);
 
   activeEventId = eventId;
   if(!eventId){
@@ -581,6 +588,66 @@ async function thibitishaFutaWote(){
   }
 }
 
+// ============ TAFUTA MGENI ============
+
+// Maandishi ya kutafuta yanayowekwa kwenye kila kadi: jina + simu + namba ya getini
+function wekaMaandishiYaKutafuta(card, data){
+  const maandishi = [data.name || '', data.phone || '', data.namba || ''].join(' ').toLowerCase();
+  card.dataset.tafuta = maandishi;
+}
+
+// Kadi inalingana kama maneno YOTE yaliyoandikwa yamo ndani yake
+function kadiInalingana(card){
+  if(tafutaManeno.length === 0) return true;
+  const hay = card.dataset.tafuta || '';
+  return tafutaManeno.every(neno => hay.indexOf(neno) !== -1);
+}
+
+// Chuja kadi: onyesha zinazolingana, ficha nyingine
+function tumiaUtafutaji(){
+  const kisanduku = document.getElementById('guestSearch');
+  const info = document.getElementById('searchInfo');
+  const kitufeFuta = document.getElementById('searchClear');
+
+  const neno = (kisanduku ? kisanduku.value : '').toLowerCase().trim();
+  tafutaManeno = neno ? neno.split(/\s+/) : [];
+
+  let zinazolingana = 0;
+  kadiZaWageni.forEach(card => {
+    const sawa = kadiInalingana(card);
+    card.style.display = sawa ? '' : 'none';
+    if(sawa) zinazolingana++;
+  });
+
+  if(kitufeFuta) kitufeFuta.style.display = tafutaManeno.length ? 'inline-block' : 'none';
+
+  if(info){
+    if(tafutaManeno.length === 0){
+      info.textContent = '';
+    }else if(zinazolingana === 0){
+      info.textContent = 'Hakuna mgeni anayelingana na "' + neno + '".';
+    }else{
+      info.textContent = 'Imepatikana ' + zinazolingana + ' kati ya ' + kadiZaWageni.size + '.';
+    }
+  }
+}
+
+// Subiri kidogo mtu anapoandika, ili isichuje kila herufi mara moja
+function ratibishaUtafutaji(){
+  if(tafutaTimer) clearTimeout(tafutaTimer);
+  tafutaTimer = setTimeout(tumiaUtafutaji, 150);
+}
+
+// Futa utafutaji na urudishe wageni wote
+function ufutaUtafutaji(bilaKuweka){
+  const kisanduku = document.getElementById('guestSearch');
+  if(kisanduku) kisanduku.value = '';
+  tumiaUtafutaji();
+  if(!bilaKuweka && kisanduku){
+    try{ kisanduku.focus(); }catch(e){}
+  }
+}
+
 // ============ ORODHA YA WAGENI (YA HARAKA) ============
 
 // Hesabu wageni wote kwenye orodha: jumla, single, double, waliohudhuria
@@ -705,6 +772,7 @@ function tengenezaKadi(eventId, guestId, data){
   card.appendChild(qrBox);
   card.appendChild(mwili);
   jazaMwiliWaKadi(mwili, eventId, guestId, data);
+  wekaMaandishiYaKutafuta(card, data);
   return card;
 }
 
@@ -748,6 +816,7 @@ function listenToGuests(eventId){
 
           // Sasisha maandishi na vitufe tu; QR inabaki kama ilivyo
           jazaMwiliWaKadi(card.querySelector('.card-body'), eventId, id, data);
+          wekaMaandishiYaKutafuta(card, data);
 
           // Kama nafasi imebadilika, hamisha kadi
           if(change.oldIndex !== change.newIndex){
@@ -768,6 +837,9 @@ function listenToGuests(eventId){
 
       // Hesabu zinatoka kwenye orodha NZIMA ya wageni (wa zamani na wapya)
       sasishaTakwimu(snap.docs);
+
+      // Tumia utafutaji uliopo (mgeni mpya au aliyebadilika ajichuje pia)
+      tumiaUtafutaji();
 
       if(hitilafuEneo && hitilafuEneo.textContent.indexOf('Hitilafu kusoma orodha') === 0){
         hitilafuEneo.textContent = '';
