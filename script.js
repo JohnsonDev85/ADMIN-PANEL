@@ -24,6 +24,9 @@ let nambaZilizotumikaCache = null;
 // Kadi za wageni zilizopo kwenye ukurasa (guestId -> kipengele cha kadi)
 let kadiZaWageni = new Map();
 
+// Taarifa za wageni (guestId -> data) kwa ajili ya kitufe cha WhatsApp
+let dataZaWageni = new Map();
+
 // Mwangalizi wa QR: QR inatengenezwa kadi inapokaribia kuonekana kwenye skrini
 let qrObserver = null;
 
@@ -88,6 +91,64 @@ function copyNamba(namba){
   }else{
     prompt('Nakili namba hii:', namba);
   }
+}
+
+// ============ WHATSAPP ============
+
+const UJUMBE_WA_MWANZO =
+  'Habari [JINA], hii ni JOHCARDS. Tumetumwa kukuletea kadi yako ya mwaliko wa [TUKIO]. Karibu sana!\n\n' +
+  'Kodi yako ya getini: [KODI]';
+
+const UFUNGUO_UJUMBE_WA = 'johcards_wa_ujumbe';
+
+// Pakia ujumbe uliohifadhiwa (au tumia wa mwanzo)
+function pakiaUjumbeWaWhatsApp(){
+  const kisanduku = document.getElementById('waMessage');
+  if(!kisanduku) return;
+  let ujumbe = '';
+  try{ ujumbe = localStorage.getItem(UFUNGUO_UJUMBE_WA) || ''; }catch(e){}
+  kisanduku.value = ujumbe || UJUMBE_WA_MWANZO;
+}
+
+// Hifadhi ujumbe kila unapoandika
+function hifadhiUjumbe(){
+  const kisanduku = document.getElementById('waMessage');
+  if(!kisanduku) return;
+  try{ localStorage.setItem(UFUNGUO_UJUMBE_WA, kisanduku.value); }catch(e){}
+}
+
+// Geuza namba ya simu kuwa muundo wa kimataifa kwa wa.me (255712345678)
+function nambaYaWhatsApp(simu){
+  let n = String(simu == null ? '' : simu).replace(/\D/g, ''); // acha tarakimu tu
+  if(!n) return '';
+  if(n.indexOf('255') === 0) return n;           // tayari ina 255
+  if(n.charAt(0) === '0') return '255' + n.slice(1); // 0712... -> 255712...
+  if(n.length === 9) return '255' + n;           // 712... -> 255712...
+  return n;                                      // namba nyingine (ya nje)
+}
+
+// Fungua WhatsApp ikiwa na ujumbe tayari kwa mgeni huyu
+function tumaWhatsApp(guestId){
+  const g = dataZaWageni.get(guestId);
+  if(!g) return;
+
+  const nambaWA = nambaYaWhatsApp(g.phone);
+  if(!nambaWA){
+    alert('Mgeni huyu hana namba ya simu.');
+    return;
+  }
+
+  const kisanduku = document.getElementById('waMessage');
+  let ujumbe = kisanduku && kisanduku.value.trim() ? kisanduku.value : UJUMBE_WA_MWANZO;
+
+  const jinaLaTukio = activeEventData ? (activeEventData.name || '') : '';
+  ujumbe = ujumbe
+    .replace(/\[JINA\]/gi, g.name || '')
+    .replace(/\[TUKIO\]/gi, jinaLaTukio)
+    .replace(/\[KODI\]/gi, g.namba || '');
+
+  const url = 'https://wa.me/' + nambaWA + '?text=' + encodeURIComponent(ujumbe);
+  window.open(url, '_blank');
 }
 
 // ============ EVENTS ============
@@ -682,6 +743,7 @@ function futaKadiZote(){
     qrObserver = null;
   }
   kadiZaWageni = new Map();
+  dataZaWageni = new Map();
   sasishaTakwimu();
   if(grid) grid.innerHTML = '';
 }
@@ -719,6 +781,9 @@ function andaaMwangalizi(){
 
 // Jaza sehemu ya chini ya kadi (jina, hali, vitufe). QR haiguswi hapa.
 function jazaMwiliWaKadi(mwili, eventId, guestId, data){
+  // Kumbuka taarifa za mgeni kwa ajili ya kitufe cha WhatsApp
+  dataZaWageni.set(guestId, data);
+
   const ainaMaandishi = data.aina === 'double' ? 'DOUBLE' : 'SINGLE';
 
   // Code ya mgeni (kwa SMS), inaonekana chini ya QR
@@ -728,6 +793,11 @@ function jazaMwiliWaKadi(mwili, eventId, guestId, data){
 
   const kitufeNamba = data.namba
     ? `<button class="dl" onclick="copyNamba('${data.namba}')">Nakili Namba</button>`
+    : '';
+
+  // Kitufe cha WhatsApp (kinaonekana kwa mgeni mwenye namba ya simu tu)
+  const kitufeWhatsApp = data.phone
+    ? `<button class="dl" style="background:#25D366;color:#fff;" onclick="tumaWhatsApp('${guestId}')">WhatsApp</button>`
     : '';
 
   mwili.innerHTML = `
@@ -745,6 +815,7 @@ function jazaMwiliWaKadi(mwili, eventId, guestId, data){
     </div>
     <div class="card-actions">
       <button class="dl" onclick="downloadQR('${eventId}','${guestId}','${sanitizeFilename(data.name)}')">Pakua QR</button>
+      ${kitufeWhatsApp}
       ${kitufeNamba}
       <button class="dl del" onclick="deleteGuest('${eventId}','${guestId}')">Futa</button>
     </div>
@@ -832,6 +903,7 @@ function listenToGuests(eventId){
             card.remove();
             kadiZaWageni.delete(id);
           }
+          dataZaWageni.delete(id);
         }
       });
 
@@ -968,4 +1040,5 @@ document.getElementById('selectEvent').addEventListener('change', (e) => {
 });
 
 // ============ INIT ============
+pakiaUjumbeWaWhatsApp();
 loadEvents();
