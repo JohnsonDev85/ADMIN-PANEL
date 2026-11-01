@@ -124,3 +124,24 @@ textarea{ min-height:100px; resize:vertical; line-height:1.6; }
   text-align:center; padding: 50px 20px; color: var(--cream-dim);
   border: 1px dashed var(--line); border-radius: 12px; font-size: 14px; line-height:1.7;
 }
+.tabs{
+  display:flex;
+  gap:10px;
+  margin-bottom:20px;
+}
+.tab{
+  flex:1;
+  padding:12px 16px;
+  border:1px solid rgba(255,255,255,0.25);
+  border-radius:12px;
+  background:transparent;
+  color:inherit;
+  font-family:inherit;
+  font-size:15px;
+  font-weight:600;
+  cursor:pointer;
+}
+.tab.active{
+  background:rgba(255,255,255,0.15);
+  border-color:rgba(255,255,255,0.6);
+}
