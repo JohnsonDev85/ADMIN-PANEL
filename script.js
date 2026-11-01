@@ -1034,6 +1034,270 @@ async function downloadExcelNamba(){
   }
 }
 
+// ============ KUBADILISHA SEHEMU (WAGENI / MICHANGO) ============
+function badilishaSehemu(jina){
+  const niWageni = (jina === 'wageni');
+  document.getElementById('sehemuWageni').style.display = niWageni ? '' : 'none';
+  document.getElementById('sehemuMichango').style.display = niWageni ? 'none' : '';
+  document.getElementById('tabWageni').classList.toggle('active', niWageni);
+  document.getElementById('tabMichango').classList.toggle('active', !niWageni);
+
+  // Pakia orodha ya michango mara ya kwanza tu unapofungua sehemu hii
+  if(!niWageni && !michangoUnsub) michangoSikiliza();
+}
+
+// ============ MICHANGO ============
+const UFUNGUO_UJUMBE_MCH = 'johcards_michango_ujumbe';
+const UJUMBE_MCH_MWANZO =
+  'Habari [JINA], tunaomba mchango wako kwa ajili ya ... Asante sana na Mungu akubariki.';
+
+let michangoWaFaili = [];
+let michangoUnsub = null;
+let michangoData = new Map(); // id -> {name, phone}
+
+function michangoBadilishaNjia(){
+  const njia = document.getElementById('mchNjia').value;
+  document.getElementById('mchAndika').style.display = (njia === 'andika') ? '' : 'none';
+  document.getElementById('mchFaili').style.display = (njia === 'faili') ? '' : 'none';
+}
+
+// Ujumbe
+function michangoPakiaUjumbe(){
+  const k = document.getElementById('mchUjumbe');
+  if(!k) return;
+  let u = '';
+  try{ u = localStorage.getItem(UFUNGUO_UJUMBE_MCH) || ''; }catch(e){}
+  k.value = u || UJUMBE_MCH_MWANZO;
+}
+function michangoHifadhiUjumbe(){
+  const k = document.getElementById('mchUjumbe');
+  if(!k) return;
+  try{ localStorage.setItem(UFUNGUO_UJUMBE_MCH, k.value); }catch(e){}
+}
+
+// Soma faili la Excel/CSV
+function michangoSomaFaili(input){
+  const preview = document.getElementById('mchPreview');
+  michangoWaFaili = [];
+  preview.innerHTML = '';
+
+  const file = input.files && input.files[0];
+  if(!file) return;
+
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+
+  reader.onerror = () => { preview.textContent = 'Imeshindikana kusoma faili.'; };
+
+  reader.onload = (e) => {
+    try{
+      const wb = isCsv
+        ? XLSX.read(e.target.result, { type: 'string', raw: true })
+        : XLSX.read(e.target.result, { type: 'array' });
+
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+
+      const watu = [];
+      rows.forEach((row, i) => {
+        const jina = String(row[0] == null ? '' : row[0]).trim();
+        if(!jina) return;
+        if(i === 0 && ['jina', 'majina', 'name', 'names'].includes(jina.toLowerCase())) return;
+
+        let simu = row[1];
+        if(typeof simu === 'number') simu = simu.toFixed(0);
+        watu.push({ name: jina, phone: safishaNambaYaSimu(simu) });
+      });
+
+      michangoWaFaili = watu;
+
+      if(watu.length === 0){
+        preview.textContent = 'Hakuna majina yaliyopatikana kwenye faili hili.';
+        return;
+      }
+
+      const mfano = watu.slice(0, 5).map(g =>
+        `<li>${escapeHtml(g.name)}${g.phone ? ' · ' + escapeHtml(g.phone) : ''}</li>`
+      ).join('');
+      const zaidi = watu.length > 5 ? `<div>...na wengine ${watu.length - 5}</div>` : '';
+
+      preview.innerHTML =
+        `<strong>Watu ${watu.length} wamepatikana.</strong>` +
+        `<ul style="margin:6px 0 6px 18px;padding:0;">${mfano}</ul>${zaidi}` +
+        `<div style="margin-top:6px;">Bonyeza "Ongeza Kwenye Orodha" kuwahifadhi.</div>`;
+    }catch(err){
+      console.error(err);
+      preview.textContent = 'Faili halisomeki: ' + err.message;
+    }
+  };
+
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+// Ongeza watu kwenye orodha ya michango
+async function michangoOngeza(){
+  const status = document.getElementById('mchStatus');
+  const njia = document.getElementById('mchNjia').value;
+  let watu = [];
+
+  if(njia === 'faili'){
+    if(michangoWaFaili.length === 0){
+      alert('Chagua faili lenye majina kwanza.');
+      return;
+    }
+    watu = michangoWaFaili.slice();
+  }else{
+    const mistari = document.getElementById('mchMaandishi').value
+      .split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if(mistari.length === 0){
+      alert('Andika jina angalau moja.');
+      return;
+    }
+    watu = mistari.map(line => {
+      const p = line.split(',').map(x => x.trim());
+      return { name: p[0] || '', phone: safishaNambaYaSimu(p[1] || '') };
+    }).filter(g => g.name.length > 0);
+  }
+
+  status.textContent = 'Inaongeza...';
+  try{
+    const ref = db.collection('michango_watu');
+    const ukubwa = 400;
+    for(let i = 0; i < watu.length; i += ukubwa){
+      const batch = db.batch();
+      watu.slice(i, i + ukubwa).forEach(g => {
+        batch.set(ref.doc(), {
+          name: g.name,
+          phone: g.phone,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      await batch.commit();
+    }
+
+    document.getElementById('mchMaandishi').value = '';
+    const f = document.getElementById('mchFailiInput');
+    if(f) f.value = '';
+    michangoWaFaili = [];
+    document.getElementById('mchPreview').innerHTML = '';
+    status.textContent = 'Watu ' + watu.length + ' wameongezwa.';
+  }catch(err){
+    console.error(err);
+    status.textContent = 'Hitilafu: ' + err.message;
+  }
+}
+
+// Sikiliza orodha moja kwa moja
+function michangoSikiliza(){
+  michangoUnsub = db.collection('michango_watu')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      michangoData = new Map();
+      snap.forEach(d => michangoData.set(d.id, d.data()));
+      michangoChora();
+    }, err => {
+      console.error('Michango listener error:', err);
+      document.getElementById('mchHesabu').textContent = 'Hitilafu kusoma orodha: ' + err.message;
+    });
+}
+
+// Onyesha orodha (inazingatia utafutaji)
+function michangoChora(){
+  const eneo = document.getElementById('mchOrodha');
+  const hesabu = document.getElementById('mchHesabu');
+  if(!eneo) return;
+
+  const maneno = (document.getElementById('mchTafuta').value || '')
+    .toLowerCase().trim().split(/\s+/).filter(Boolean);
+
+  let html = '';
+  let idadi = 0;
+
+  michangoData.forEach((g, id) => {
+    const hay = ((g.name || '') + ' ' + (g.phone || '')).toLowerCase();
+    if(!maneno.every(m => hay.indexOf(m) !== -1)) return;
+    idadi++;
+
+    const kitufeWA = g.phone
+      ? `<button class="dl" style="background:#25D366;color:#fff;" onclick="michangoTumaWhatsApp('${id}')">WhatsApp</button>`
+      : '<span style="font-size:13px;opacity:0.7;">Hana namba</span>';
+
+    html +=
+      `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;` +
+      `padding:12px 14px;margin-bottom:8px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;">` +
+        `<div style="min-width:0;">` +
+          `<div style="font-weight:600;">${escapeHtml(g.name || '')}</div>` +
+          `<div style="font-size:13px;opacity:0.8;">${escapeHtml(g.phone || '')}</div>` +
+        `</div>` +
+        `<div style="display:flex;gap:8px;">` +
+          kitufeWA +
+          `<button class="dl del" onclick="michangoFuta('${id}')">Futa</button>` +
+        `</div>` +
+      `</div>`;
+  });
+
+  eneo.innerHTML = html || '<div style="opacity:0.7;">Hakuna watu kwenye orodha.</div>';
+
+  if(maneno.length){
+    hesabu.textContent = 'Imepatikana ' + idadi + ' kati ya ' + michangoData.size + '.';
+  }else{
+    hesabu.textContent = 'Jumla: ' + michangoData.size;
+  }
+}
+
+// Fungua WhatsApp na ujumbe tayari
+function michangoTumaWhatsApp(id){
+  const g = michangoData.get(id);
+  if(!g) return;
+
+  const nambaWA = nambaYaWhatsApp(g.phone);
+  if(!nambaWA){
+    alert('Mtu huyu hana namba ya simu.');
+    return;
+  }
+
+  const k = document.getElementById('mchUjumbe');
+  let ujumbe = k && k.value.trim() ? k.value : UJUMBE_MCH_MWANZO;
+  ujumbe = ujumbe.replace(/\[JINA\]/gi, g.name || '');
+
+  window.open('https://wa.me/' + nambaWA + '?text=' + encodeURIComponent(ujumbe), '_blank');
+}
+
+async function michangoFuta(id){
+  if(!confirm('Una uhakika unataka kumfuta mtu huyu?')) return;
+  try{
+    await db.collection('michango_watu').doc(id).delete();
+  }catch(err){
+    console.error(err);
+    alert('Imeshindikana kufuta: ' + err.message);
+  }
+}
+
+async function michangoFutaWote(){
+  if(michangoData.size === 0){
+    alert('Hakuna watu kwenye orodha.');
+    return;
+  }
+  const jibu = prompt('Utafuta watu ' + michangoData.size + ' wote. Andika FUTA kuthibitisha:');
+  if(!jibu || jibu.trim().toUpperCase() !== 'FUTA') return;
+
+  const status = document.getElementById('mchHesabu');
+  status.textContent = 'Inafuta...';
+  try{
+    const ref = db.collection('michango_watu');
+    while(true){
+      const snap = await ref.limit(400).get();
+      if(snap.empty) break;
+      const batch = db.batch();
+      snap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }catch(err){
+    console.error(err);
+    status.textContent = 'Hitilafu wakati wa kufuta: ' + err.message;
+  }
+}
+
 // ============ EVENT LISTENERS ============
 document.getElementById('selectEvent').addEventListener('change', (e) => {
   onEventSelected(e.target.value);
@@ -1041,4 +1305,5 @@ document.getElementById('selectEvent').addEventListener('change', (e) => {
 
 // ============ INIT ============
 pakiaUjumbeWaWhatsApp();
+michangoPakiaUjumbe();
 loadEvents();
