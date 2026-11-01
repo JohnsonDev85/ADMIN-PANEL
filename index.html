@@ -27,186 +27,265 @@
       <p>Unda tukio, ongeza wageni, tengeneza QR ya kila mgeni.</p>
     </header>
 
-    <!-- SEHEMU 1: TUKIO -->
-    <div class="panel">
-      <div class="section-title">1. Tukio <div class="divider"></div></div>
-
-      <div class="field-row">
-        <div class="field">
-          <label for="selectEvent">Chagua Tukio Lililopo</label>
-          <select id="selectEvent">
-            <option value="">— Chagua tukio —</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="actions" id="eventTools" style="display:none;">
-        <button class="btn" onclick="startEditEvent()">Hariri Tukio</button>
-        <button class="btn" style="background:#b3261e;color:#fff;" onclick="deleteEvent()">Futa Tukio</button>
-      </div>
-
-      <div class="or-line"><span>au unda tukio jipya</span></div>
-
-      <div class="field-row">
-        <div class="field">
-          <label for="eventName">Jina la Tukio</label>
-          <input type="text" id="eventName" placeholder="mfano: Harusi ya Julieth" />
-        </div>
-        <div class="field">
-          <label for="eventCode">CODE Fupi</label>
-          <input type="text" id="eventCode" placeholder="mfano: JULIETH2026" />
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="eventDate">Tarehe</label>
-          <input type="date" id="eventDate" />
-        </div>
-        <div class="field">
-          <label for="eventVenue">Venue</label>
-          <input type="text" id="eventVenue" placeholder="mfano: Mombasa Palms Hotel" />
-        </div>
-      </div>
-
-      <div class="actions">
-        <button class="btn" id="eventSaveBtn" onclick="saveEvent()">Unda Tukio Jipya</button>
-        <button class="btn" id="eventCancelBtn" style="display:none;" onclick="cancelEditEvent()">Ghairi</button>
-        <span class="status-msg" id="eventStatusMsg"></span>
-      </div>
+    <!-- VITUFE VYA KUBADILISHA SEHEMU -->
+    <div class="tabs">
+      <button class="tab active" id="tabWageni" onclick="badilishaSehemu('wageni')">Wageni wa Tukio</button>
+      <button class="tab" id="tabMichango" onclick="badilishaSehemu('michango')">Michango</button>
     </div>
 
-    <!-- SEHEMU 2: WAGENI -->
-    <div class="panel" id="guestsPanel" style="display:none;">
-      <div class="section-title">2. Ongeza Wageni <div class="divider"></div></div>
-      <div class="active-event-tag" id="activeEventTag"></div>
+    <!-- ================= SEHEMU YA WAGENI ================= -->
+    <div id="sehemuWageni">
 
-      <div class="field-row">
-        <div class="field">
-          <label for="guestInputMode">Njia ya Kuongeza Wageni</label>
-          <select id="guestInputMode" onchange="badilishaNjiaYaKuingiza()">
-            <option value="andika">Andika majina mwenyewe</option>
-            <option value="faili">Pakia faili (Excel au CSV)</option>
-          </select>
+      <!-- SEHEMU 1: TUKIO -->
+      <div class="panel">
+        <div class="section-title">1. Tukio <div class="divider"></div></div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="selectEvent">Chagua Tukio Lililopo</label>
+            <select id="selectEvent">
+              <option value="">— Chagua tukio —</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions" id="eventTools" style="display:none;">
+          <button class="btn" onclick="startEditEvent()">Hariri Tukio</button>
+          <button class="btn" style="background:#b3261e;color:#fff;" onclick="deleteEvent()">Futa Tukio</button>
+        </div>
+
+        <div class="or-line"><span>au unda tukio jipya</span></div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="eventName">Jina la Tukio</label>
+            <input type="text" id="eventName" placeholder="mfano: Harusi ya Julieth" />
+          </div>
+          <div class="field">
+            <label for="eventCode">CODE Fupi</label>
+            <input type="text" id="eventCode" placeholder="mfano: JULIETH2026" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="eventDate">Tarehe</label>
+            <input type="date" id="eventDate" />
+          </div>
+          <div class="field">
+            <label for="eventVenue">Venue</label>
+            <input type="text" id="eventVenue" placeholder="mfano: Mombasa Palms Hotel" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="eventSaveBtn" onclick="saveEvent()">Unda Tukio Jipya</button>
+          <button class="btn" id="eventCancelBtn" style="display:none;" onclick="cancelEditEvent()">Ghairi</button>
+          <span class="status-msg" id="eventStatusMsg"></span>
         </div>
       </div>
 
-      <!-- Njia 1: Kuandika -->
-      <div class="field-row" id="njiaAndika">
-        <div class="field">
-          <label for="guestNames">Majina na Namba za Wageni</label>
-          <textarea id="guestNames" placeholder="Jina, Namba ya Simu - moja kwa kila mstari, mfano:&#10;Amina Juma, 0712345678&#10;Baraka Mushi, 0755123456"></textarea>
-          <div class="hint">Andika: Jina, Namba (ukitenganisha kwa comma). Namba itakusaidia kumtafuta mgeni na kutuma kadi kwa WhatsApp.</div>
+      <!-- SEHEMU 2: WAGENI -->
+      <div class="panel" id="guestsPanel" style="display:none;">
+        <div class="section-title">2. Ongeza Wageni <div class="divider"></div></div>
+        <div class="active-event-tag" id="activeEventTag"></div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="guestInputMode">Njia ya Kuongeza Wageni</label>
+            <select id="guestInputMode" onchange="badilishaNjiaYaKuingiza()">
+              <option value="andika">Andika majina mwenyewe</option>
+              <option value="faili">Pakia faili (Excel au CSV)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Njia 1: Kuandika -->
+        <div class="field-row" id="njiaAndika">
+          <div class="field">
+            <label for="guestNames">Majina na Namba za Wageni</label>
+            <textarea id="guestNames" placeholder="Jina, Namba ya Simu - moja kwa kila mstari, mfano:&#10;Amina Juma, 0712345678&#10;Baraka Mushi, 0755123456"></textarea>
+            <div class="hint">Andika: Jina, Namba (ukitenganisha kwa comma). Namba itakusaidia kumtafuta mgeni na kutuma kadi kwa WhatsApp.</div>
+          </div>
+        </div>
+
+        <!-- Njia 2: Kupakia faili -->
+        <div class="field-row" id="njiaFaili" style="display:none;">
+          <div class="field">
+            <label for="guestFile">Chagua Faili (.xlsx, .xls au .csv)</label>
+            <input type="file" id="guestFile" accept=".xlsx,.xls,.csv" onchange="somaFailiLaWageni(this)" />
+            <div class="hint">Safu ya kwanza iwe jina, ya pili iwe namba ya simu. Kichwa cha habari (jina, namba ya simu) kinaruhusiwa.</div>
+            <div id="failiPreview" style="margin-top:10px;font-size:14px;"></div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="guestPaid">Hali ya Malipo ya Wageni Hawa</label>
+            <select id="guestPaid">
+              <option value="false">Hawajalipa</option>
+              <option value="true">Wamelipa</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="guestAina">Aina ya Kadi</label>
+            <select id="guestAina">
+              <option value="single">Single (mtu 1)</option>
+              <option value="double">Double (watu 2)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="guestNjia">Njia ya Kumfikia Mgeni</label>
+            <select id="guestNjia">
+              <option value="qr">Kadi ya QR (WhatsApp)</option>
+              <option value="namba">Namba tu (simu ya button)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn" onclick="addGuests()">Ongeza Wageni + Tengeneza QR</button>
+          <span class="count-tag" id="guestCountTag"></span>
         </div>
       </div>
 
-      <!-- Njia 2: Kupakia faili -->
-      <div class="field-row" id="njiaFaili" style="display:none;">
-        <div class="field">
-          <label for="guestFile">Chagua Faili (.xlsx, .xls au .csv)</label>
-          <input type="file" id="guestFile" accept=".xlsx,.xls,.csv" onchange="somaFailiLaWageni(this)" />
-          <div class="hint">Safu ya kwanza iwe jina, ya pili iwe namba ya simu. Kichwa cha habari (jina, namba ya simu) kinaruhusiwa.</div>
-          <div id="failiPreview" style="margin-top:10px;font-size:14px;"></div>
+      <!-- SEHEMU 3: ORODHA -->
+      <div id="listSection" style="display:none;">
+        <div class="section-title">3. Orodha ya Wageni <div class="divider"></div></div>
+
+        <!-- Muhtasari wa wageni (unajisasisha wenyewe) -->
+        <div id="guestStats" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+          <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+            <div id="statJumla" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+            <div style="font-size:13px;opacity:0.8;margin-top:4px;">Jumla ya Wageni</div>
+          </div>
+          <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+            <div id="statSingle" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+            <div style="font-size:13px;opacity:0.8;margin-top:4px;">Single</div>
+          </div>
+          <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+            <div id="statDouble" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+            <div style="font-size:13px;opacity:0.8;margin-top:4px;">Double</div>
+          </div>
+          <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+            <div id="statAttended" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+            <div style="font-size:13px;opacity:0.8;margin-top:4px;">Waliohudhuria</div>
+          </div>
         </div>
+
+        <div class="actions" style="margin-bottom:16px;">
+          <button class="btn" onclick="downloadExcelNamba()">Pakua Excel ya Namba</button>
+          <button class="btn" style="background:#b3261e;color:#fff;" onclick="deleteAllGuests()">Futa Wageni Wote</button>
+        </div>
+
+        <!-- Kisanduku cha kuthibitisha kufuta wote -->
+        <div id="deleteAllBox" style="display:none;margin-bottom:16px;padding:14px;border:1px solid #b3261e;border-radius:12px;">
+          <div id="deleteAllText" style="margin-bottom:10px;"></div>
+          <input type="text" id="deleteAllInput" placeholder="Andika FUTA hapa" autocomplete="off" />
+          <div class="actions" style="margin-top:10px;">
+            <button class="btn" style="background:#b3261e;color:#fff;" onclick="thibitishaFutaWote()">Thibitisha Kufuta</button>
+            <button class="btn" onclick="ghairiFutaWote()">Ghairi</button>
+          </div>
+        </div>
+        <div class="status-msg" id="deleteAllStatus" style="margin-bottom:16px;"></div>
+
+        <!-- Ujumbe wa WhatsApp -->
+        <div class="field-row">
+          <div class="field">
+            <label for="waMessage">Ujumbe wa WhatsApp (unatumika kwa wageni wote)</label>
+            <textarea id="waMessage" rows="5" oninput="hifadhiUjumbe()"></textarea>
+            <div class="hint">Tumia [JINA] jina la mgeni, [TUKIO] jina la tukio, [KODI] kodi ya getini. Zitabadilishwa kiotomatiki kwa kila mgeni.</div>
+          </div>
+        </div>
+
+        <!-- Tafuta mgeni -->
+        <div class="field-row">
+          <div class="field">
+            <label for="guestSearch">Tafuta Mgeni</label>
+            <input type="text" id="guestSearch" placeholder="Andika jina (mfano: Amina)" autocomplete="off" oninput="ratibishaUtafutaji()" />
+            <div id="searchInfo" style="font-size:13px;opacity:0.85;margin-top:6px;"></div>
+            <button class="btn" id="searchClear" style="display:none;margin-top:8px;" onclick="ufutaUtafutaji()">Futa Utafutaji</button>
+          </div>
+        </div>
+
+        <div class="grid" id="guestGrid"></div>
       </div>
 
-      <div class="field-row">
-        <div class="field">
-          <label for="guestPaid">Hali ya Malipo ya Wageni Hawa</label>
-          <select id="guestPaid">
-            <option value="false">Hawajalipa</option>
-            <option value="true">Wamelipa</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="guestAina">Aina ya Kadi</label>
-          <select id="guestAina">
-            <option value="single">Single (mtu 1)</option>
-            <option value="double">Double (watu 2)</option>
-          </select>
-        </div>
-      </div>
+      <div class="empty" id="emptyState">Chagua au unda tukio kuanza kuongeza wageni.</div>
 
-      <div class="field-row">
-        <div class="field">
-          <label for="guestNjia">Njia ya Kumfikia Mgeni</label>
-          <select id="guestNjia">
-            <option value="qr">Kadi ya QR (WhatsApp)</option>
-            <option value="namba">Namba tu (simu ya button)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button class="btn" onclick="addGuests()">Ongeza Wageni + Tengeneza QR</button>
-        <span class="count-tag" id="guestCountTag"></span>
-      </div>
     </div>
+    <!-- mwisho wa sehemuWageni -->
 
-    <!-- SEHEMU 3: ORODHA -->
-    <div id="listSection" style="display:none;">
-      <div class="section-title">3. Orodha ya Wageni <div class="divider"></div></div>
+    <!-- ================= SEHEMU YA MICHANGO ================= -->
+    <div id="sehemuMichango" style="display:none;">
 
-      <!-- Muhtasari wa wageni (unajisasisha wenyewe) -->
-      <div id="guestStats" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-        <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
-          <div id="statJumla" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
-          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Jumla ya Wageni</div>
+      <!-- Ongeza watu -->
+      <div class="panel">
+        <div class="section-title">Ongeza Watu wa Michango <div class="divider"></div></div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="mchNjia">Njia ya Kuongeza</label>
+            <select id="mchNjia" onchange="michangoBadilishaNjia()">
+              <option value="andika">Andika majina mwenyewe</option>
+              <option value="faili">Pakia faili (Excel au CSV)</option>
+            </select>
+          </div>
         </div>
-        <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
-          <div id="statSingle" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
-          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Single</div>
+
+        <div class="field-row" id="mchAndika">
+          <div class="field">
+            <label for="mchMaandishi">Majina na Namba</label>
+            <textarea id="mchMaandishi" placeholder="Jina, Namba ya Simu - moja kwa kila mstari, mfano:&#10;Amina Juma, 0712345678&#10;Baraka Mushi, 0755123456"></textarea>
+            <div class="hint">Andika: Jina, Namba (ukitenganisha kwa comma).</div>
+          </div>
         </div>
-        <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
-          <div id="statDouble" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
-          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Double</div>
+
+        <div class="field-row" id="mchFaili" style="display:none;">
+          <div class="field">
+            <label for="mchFailiInput">Chagua Faili (.xlsx, .xls au .csv)</label>
+            <input type="file" id="mchFailiInput" accept=".xlsx,.xls,.csv" onchange="michangoSomaFaili(this)" />
+            <div class="hint">Safu ya kwanza iwe jina, ya pili iwe namba ya simu. Kichwa cha habari kinaruhusiwa.</div>
+            <div id="mchPreview" style="margin-top:10px;font-size:14px;"></div>
+          </div>
         </div>
-        <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
-          <div id="statAttended" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
-          <div style="font-size:13px;opacity:0.8;margin-top:4px;">Waliohudhuria</div>
+
+        <div class="actions">
+          <button class="btn" onclick="michangoOngeza()">Ongeza Kwenye Orodha</button>
+          <span class="count-tag" id="mchStatus"></span>
+        </div>
+      </div>
+
+      <!-- Orodha -->
+      <div class="section-title">Orodha ya Michango <div class="divider"></div></div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="mchUjumbe">Ujumbe wa WhatsApp wa Kuomba Mchango</label>
+          <textarea id="mchUjumbe" rows="5" oninput="michangoHifadhiUjumbe()"></textarea>
+          <div class="hint">Tumia [JINA] kuweka jina la mtu kiotomatiki.</div>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="mchTafuta">Tafuta</label>
+          <input type="text" id="mchTafuta" placeholder="Andika jina au namba" autocomplete="off" oninput="michangoChora()" />
+          <div id="mchHesabu" style="font-size:13px;opacity:0.85;margin-top:6px;"></div>
         </div>
       </div>
 
       <div class="actions" style="margin-bottom:16px;">
-        <button class="btn" onclick="downloadExcelNamba()">Pakua Excel ya Namba</button>
-        <button class="btn" style="background:#b3261e;color:#fff;" onclick="deleteAllGuests()">Futa Wageni Wote</button>
+        <button class="btn" style="background:#b3261e;color:#fff;" onclick="michangoFutaWote()">Futa Wote</button>
       </div>
 
-      <!-- Kisanduku cha kuthibitisha kufuta wote -->
-      <div id="deleteAllBox" style="display:none;margin-bottom:16px;padding:14px;border:1px solid #b3261e;border-radius:12px;">
-        <div id="deleteAllText" style="margin-bottom:10px;"></div>
-        <input type="text" id="deleteAllInput" placeholder="Andika FUTA hapa" autocomplete="off" />
-        <div class="actions" style="margin-top:10px;">
-          <button class="btn" style="background:#b3261e;color:#fff;" onclick="thibitishaFutaWote()">Thibitisha Kufuta</button>
-          <button class="btn" onclick="ghairiFutaWote()">Ghairi</button>
-        </div>
-      </div>
-      <div class="status-msg" id="deleteAllStatus" style="margin-bottom:16px;"></div>
-
-      <!-- Ujumbe wa WhatsApp -->
-      <div class="field-row">
-        <div class="field">
-          <label for="waMessage">Ujumbe wa WhatsApp (unatumika kwa wageni wote)</label>
-          <textarea id="waMessage" rows="5" oninput="hifadhiUjumbe()"></textarea>
-          <div class="hint">Tumia [JINA] jina la mgeni, [TUKIO] jina la tukio, [KODI] kodi ya getini. Zitabadilishwa kiotomatiki kwa kila mgeni.</div>
-        </div>
-      </div>
-
-      <!-- Tafuta mgeni -->
-      <div class="field-row">
-        <div class="field">
-          <label for="guestSearch">Tafuta Mgeni</label>
-          <input type="text" id="guestSearch" placeholder="Andika jina (mfano: Amina)" autocomplete="off" oninput="ratibishaUtafutaji()" />
-          <div id="searchInfo" style="font-size:13px;opacity:0.85;margin-top:6px;"></div>
-          <button class="btn" id="searchClear" style="display:none;margin-top:8px;" onclick="ufutaUtafutaji()">Futa Utafutaji</button>
-        </div>
-      </div>
-
-      <div class="grid" id="guestGrid"></div>
+      <div id="mchOrodha"></div>
     </div>
 
-    <div class="empty" id="emptyState">Chagua au unda tukio kuanza kuongeza wageni.</div>
   </div>
 
-<script src="script.js?v=11"></script>
+<script src="script.js?v=13"></script>
 </body>
 </html>
