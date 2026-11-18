@@ -10,6 +10,12 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
+
+// ============ ANWANI YA UKURASA WA RSVP ============
+// Kwa sasa ni CodePen (Debug View). Baadaye tutabadilisha kuwa anwani ya GitHub.
+// Weka anwani yote hapa chini, bila "?" na chochote baada yake.
+const RSVP_URL = 'PAKA_ANWANI_YA_CODEPEN_HAPA';
 
 // ============ STATE ============
 let activeEventId = null;
@@ -138,14 +144,31 @@ function tumaWhatsApp(guestId){
     return;
   }
 
+  // Hakikisha anwani ya RSVP imewekwa
+  if(!RSVP_URL || RSVP_URL.indexOf('PAKA_') === 0){
+    alert('Weka anwani ya ukurasa wa RSVP kwenye script.js (mstari wa RSVP_URL) kwanza.');
+    return;
+  }
+
   const kisanduku = document.getElementById('waMessage');
   let ujumbe = kisanduku && kisanduku.value.trim() ? kisanduku.value : UJUMBE_WA_MWANZO;
 
   const jinaLaTukio = activeEventData ? (activeEventData.name || '') : '';
+
+  // Link ya kipekee ya RSVP ya mgeni huyu
+  const linkYaRsvp = RSVP_URL + '?e=' + encodeURIComponent(activeEventId) +
+                     '&g=' + encodeURIComponent(guestId);
+
+  // Kama [RSVP] haipo kwenye ujumbe, weka link mwishoni kiotomatiki
+  if(!/\[RSVP\]/i.test(ujumbe)){
+    ujumbe = ujumbe + '\n\nTafadhali thibitisha kuhudhuria hapa: [RSVP]';
+  }
+
   ujumbe = ujumbe
     .replace(/\[JINA\]/gi, g.name || '')
     .replace(/\[TUKIO\]/gi, jinaLaTukio)
-    .replace(/\[KODI\]/gi, g.namba || '');
+    .replace(/\[KODI\]/gi, g.namba || '')
+    .replace(/\[RSVP\]/gi, linkYaRsvp);
 
   const url = 'https://wa.me/' + nambaWA + '?text=' + encodeURIComponent(ujumbe);
   window.open(url, '_blank');
@@ -711,10 +734,11 @@ function ufutaUtafutaji(bilaKuweka){
 
 // ============ ORODHA YA WAGENI (YA HARAKA) ============
 
-// Hesabu wageni wote kwenye orodha: jumla, single, double, waliohudhuria
+// Hesabu wageni wote kwenye orodha: jumla, single, double, waliohudhuria, na majibu ya RSVP
 // docs = orodha nzima ya wageni wa tukio (kutoka Firestore). Bila docs = sifuri.
 function sasishaTakwimu(docs){
   let jumla = 0, single = 0, dbl = 0, wamehudhuria = 0;
+  let rsvpNdiyo = 0, rsvpHapana = 0, rsvpBado = 0;
 
   if(docs){
     docs.forEach(d => {
@@ -722,6 +746,11 @@ function sasishaTakwimu(docs){
       jumla++;
       if(g.aina === 'double') dbl++; else single++;
       if(g.attended === true) wamehudhuria++;
+
+      // Jibu la RSVP: yes, no, au bado hajajibu
+      if(g.rsvp === 'yes') rsvpNdiyo++;
+      else if(g.rsvp === 'no') rsvpHapana++;
+      else rsvpBado++;
     });
   }
 
@@ -733,6 +762,9 @@ function sasishaTakwimu(docs){
   wekaThamani('statSingle', single);
   wekaThamani('statDouble', dbl);
   wekaThamani('statAttended', wamehudhuria);
+  wekaThamani('statRsvpYes', rsvpNdiyo);
+  wekaThamani('statRsvpNo', rsvpHapana);
+  wekaThamani('statRsvpNone', rsvpBado);
 }
 
 // Futa kadi zote kwenye ukurasa na usafishe mwangalizi wa QR
@@ -800,6 +832,17 @@ function jazaMwiliWaKadi(mwili, eventId, guestId, data){
     ? `<button class="dl" style="background:#25D366;color:#fff;" onclick="tumaWhatsApp('${guestId}')">WhatsApp</button>`
     : '';
 
+  // Alama ya jibu la RSVP
+  let rsvpDarasa = 'badge';
+  let rsvpMaandishi = 'RSVP: Bado';
+  if(data.rsvp === 'yes'){
+    rsvpDarasa = 'badge att-yes';
+    rsvpMaandishi = 'RSVP: Atahudhuria';
+  }else if(data.rsvp === 'no'){
+    rsvpDarasa = 'badge paid-no';
+    rsvpMaandishi = 'RSVP: Hataweza';
+  }
+
   mwili.innerHTML = `
     ${nambaHtml}
     <div class="g-name">${escapeHtml(data.name)}</div>
@@ -812,6 +855,7 @@ function jazaMwiliWaKadi(mwili, eventId, guestId, data){
         ${data.attended ? '✓ Amehudhuria' : 'Bado'}
       </span>
       <span class="badge">${ainaMaandishi}</span>
+      <span class="${rsvpDarasa}">${rsvpMaandishi}</span>
     </div>
     <div class="card-actions">
       <button class="dl" onclick="downloadQR('${eventId}','${guestId}','${sanitizeFilename(data.name)}')">Pakua QR</button>
@@ -1298,12 +1342,135 @@ async function michangoFutaWote(){
   }
 }
 
+// ============ LOGIN ============
+
+// Onyesha ukurasa wa kuingia (na ujumbe kama upo)
+function onyeshaLogin(ujumbe){
+  document.getElementById('authLoading').style.display = 'none';
+  document.getElementById('appWrap').style.display = 'none';
+  document.getElementById('loginWrap').style.display = '';
+  const m = document.getElementById('loginMsg');
+  if(m) m.textContent = ujumbe || '';
+}
+
+// Onyesha programu yenyewe
+function onyeshaProgramu(){
+  document.getElementById('authLoading').style.display = 'none';
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('appWrap').style.display = '';
+}
+
+// Maelezo ya hitilafu za login kwa Kiswahili
+function maelezoYaHitilafuYaLogin(err){
+  const code = err && err.code ? err.code : '';
+  if(code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found'){
+    return 'Email au password si sahihi.';
+  }
+  if(code === 'auth/invalid-email') return 'Email haijaandikwa vizuri.';
+  if(code === 'auth/too-many-requests') return 'Umejaribu mara nyingi. Subiri kidogo kisha ujaribu tena.';
+  if(code === 'auth/network-request-failed') return 'Hakuna mtandao. Angalia intaneti yako.';
+  if(code === 'auth/operation-not-allowed') return 'Email/Password haijawashwa kwenye Firebase Authentication.';
+  if(code === 'auth/unauthorized-domain') return 'Domain hii haijaruhusiwa kwenye Firebase Authentication (Authorized domains).';
+  return 'Hitilafu: ' + ((err && err.message) || 'haijulikani');
+}
+
+async function ingia(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const msg = document.getElementById('loginMsg');
+  const btn = document.getElementById('loginBtn');
+
+  if(!email || !password){
+    msg.textContent = 'Jaza email na password.';
+    return;
+  }
+
+  btn.disabled = true;
+  msg.textContent = 'Inaingia...';
+  try{
+    await auth.signInWithEmailAndPassword(email, password);
+    // Mafanikio yanashughulikiwa na onAuthStateChanged hapa chini
+  }catch(err){
+    console.error(err);
+    msg.textContent = maelezoYaHitilafuYaLogin(err);
+    btn.disabled = false;
+  }
+}
+
+async function toka(){
+  try{
+    await auth.signOut();
+  }catch(err){
+    console.error(err);
+    alert('Imeshindikana kutoka: ' + err.message);
+  }
+}
+
+// Safisha kila kitu kwenye ukurasa mtu anapotoka
+function safishaBaadaYaKutoka(){
+  if(guestsUnsubscribe){ guestsUnsubscribe(); guestsUnsubscribe = null; }
+  if(michangoUnsub){ michangoUnsub(); michangoUnsub = null; }
+
+  futaKadiZote();
+  michangoData = new Map();
+  activeEventId = null;
+  activeEventData = null;
+  nambaZilizotumikaCache = null;
+  wageniWaFaili = [];
+  michangoWaFaili = [];
+
+  cancelEditEvent();
+  ghairiFutaWote();
+
+  const select = document.getElementById('selectEvent');
+  if(select) select.innerHTML = '<option value="">— Chagua tukio —</option>';
+
+  ['eventTools', 'guestsPanel', 'listSection'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+  const tupu = document.getElementById('emptyState');
+  if(tupu) tupu.style.display = 'block';
+
+  const orodhaMch = document.getElementById('mchOrodha');
+  if(orodhaMch) orodhaMch.innerHTML = '';
+
+  badilishaSehemu('wageni');
+}
+
+// Firebase inatuambia mtu ameingia au ametoka (pia inakumbuka login ukifungua tena)
+auth.onAuthStateChanged(user => {
+  const btn = document.getElementById('loginBtn');
+  if(btn) btn.disabled = false;
+
+  if(user){
+    const pw = document.getElementById('loginPassword');
+    if(pw) pw.value = '';
+    document.getElementById('userEmail').textContent = user.email || '';
+    onyeshaProgramu();
+    loadEvents();
+  }else{
+    safishaBaadaYaKutoka();
+    onyeshaLogin('');
+  }
+});
+
 // ============ EVENT LISTENERS ============
 document.getElementById('selectEvent').addEventListener('change', (e) => {
   onEventSelected(e.target.value);
 });
 
+// Bonyeza Enter kwenye login ili kuingia
+['loginEmail', 'loginPassword'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el){
+    el.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') ingia();
+    });
+  }
+});
+
 // ============ INIT ============
 pakiaUjumbeWaWhatsApp();
 michangoPakiaUjumbe();
-loadEvents();
+// Matukio yanapakiwa baada ya kuingia (ona onAuthStateChanged hapo juu)
