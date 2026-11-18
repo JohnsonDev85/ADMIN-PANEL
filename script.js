@@ -15,7 +15,7 @@ const auth = firebase.auth();
 // ============ ANWANI YA UKURASA WA RSVP ============
 // Kwa sasa ni CodePen (Debug View). Baadaye tutabadilisha kuwa anwani ya GitHub.
 // Weka anwani yote hapa chini, bila "?" na chochote baada yake.
-const RSVP_URL = 'https://johnsondev85.github.io/RSVP/';
+const RSVP_URL = 'https://johnsondev85.github.io/RSVP/'
 
 // ============ STATE ============
 let activeEventId = null;
