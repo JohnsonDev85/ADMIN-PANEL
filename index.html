@@ -9,6 +9,7 @@
 
 <!-- Firebase (compat SDK) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 <!-- QR Code generator -->
@@ -20,11 +21,48 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="wrap">
+
+  <!-- INAPAKIA (inaonekana sekunde chache za mwanzo) -->
+  <div id="authLoading" style="text-align:center;padding:60px 20px;opacity:0.8;">Inapakia...</div>
+
+  <!-- ================= UKURASA WA LOGIN ================= -->
+  <div class="wrap" id="loginWrap" style="display:none;">
+    <header>
+      <div class="eyebrow">JOHCARDS &middot; ADMIN PANEL</div>
+      <h1>Ingia</h1>
+      <p>Ukurasa huu ni wa msimamizi tu.</p>
+    </header>
+
+    <div class="panel">
+      <div class="field-row">
+        <div class="field">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" autocomplete="username" />
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" />
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="loginBtn" onclick="ingia()">Ingia</button>
+        <span class="status-msg" id="loginMsg"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PROGRAMU YENYEWE ================= -->
+  <div class="wrap" id="appWrap" style="display:none;">
     <header>
       <div class="eyebrow">JOHCARDS &middot; ADMIN PANEL</div>
       <h1>Usimamizi wa Matukio na Wageni</h1>
       <p>Unda tukio, ongeza wageni, tengeneza QR ya kila mgeni.</p>
+      <div style="margin-top:10px;font-size:13px;opacity:0.85;">
+        <span id="userEmail"></span>
+        <button class="btn" style="margin-left:8px;" onclick="toka()">Toka</button>
+      </div>
     </header>
 
     <!-- VITUFE VYA KUBADILISHA SEHEMU -->
@@ -173,6 +211,18 @@
             <div id="statAttended" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
             <div style="font-size:13px;opacity:0.8;margin-top:4px;">Waliohudhuria</div>
           </div>
+          <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+            <div id="statRsvpYes" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+            <div style="font-size:13px;opacity:0.8;margin-top:4px;">RSVP: Watahudhuria</div>
+          </div>
+          <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+            <div id="statRsvpNo" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+            <div style="font-size:13px;opacity:0.8;margin-top:4px;">RSVP: Hawataweza</div>
+          </div>
+          <div style="flex:1 1 120px;min-width:110px;padding:12px 14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;background:rgba(255,255,255,0.05);text-align:center;">
+            <div id="statRsvpNone" style="font-size:28px;font-weight:700;line-height:1.1;">0</div>
+            <div style="font-size:13px;opacity:0.8;margin-top:4px;">RSVP: Hawajajibu</div>
+          </div>
         </div>
 
         <div class="actions" style="margin-bottom:16px;">
@@ -196,7 +246,7 @@
           <div class="field">
             <label for="waMessage">Ujumbe wa WhatsApp (unatumika kwa wageni wote)</label>
             <textarea id="waMessage" rows="5" oninput="hifadhiUjumbe()"></textarea>
-            <div class="hint">Tumia [JINA] jina la mgeni, [TUKIO] jina la tukio, [KODI] kodi ya getini. Zitabadilishwa kiotomatiki kwa kila mgeni.</div>
+            <div class="hint">Tumia [JINA] jina la mgeni, [TUKIO] jina la tukio, [KODI] kodi ya getini, [RSVP] link ya kujibu. Zitabadilishwa kiotomatiki kwa kila mgeni. Ukiacha [RSVP], link itawekwa mwishoni kiotomatiki.</div>
           </div>
         </div>
 
@@ -286,6 +336,6 @@
 
   </div>
 
-<script src="script.js?v=13"></script>
+<script src="script.js?v=16"></script>
 </body>
 </html>
