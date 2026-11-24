@@ -1126,7 +1126,7 @@ async function downloadExcelRsvp(){
 
     const majinaYaJibu = { yes: 'Atahudhuria', no: 'Hataweza', none: 'Hajajibu' };
 
-    const rows = [['jina', 'namba ya simu', 'aina ya KADI', 'jibu la RSVP']];
+    const rows = [['jina', 'namba ya simu', 'aina', 'jibu la RSVP']];
     wageni.forEach(g => {
       const jibuLake = (g.rsvp === 'yes' || g.rsvp === 'no') ? g.rsvp : 'none';
       rows.push([
