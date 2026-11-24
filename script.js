@@ -1031,7 +1031,7 @@ function downloadQR(eventId, guestId, filename){
 // ============ EXCEL YA WAGENI WOTE ============
 // Pakua Excel ya wageni WOTE wa tukio lililochaguliwa
 // Safu: jina | namba ya simu | kodi
-async function downloadExcelNamba(){
+async function downloadExcelNambaZamani(){
   if(!activeEventId || !activeEventData){
     alert('Chagua tukio kwanza.');
     return;
@@ -1072,6 +1072,85 @@ async function downloadExcelNamba(){
     XLSX.utils.book_append_sheet(wb, ws, 'Wageni');
 
     XLSX.writeFile(wb, `Wageni_${sanitizeFilename(activeEventData.name)}.xlsx`);
+  }catch(err){
+    console.error(err);
+    alert('Imeshindikana kutengeneza Excel: ' + err.message);
+  }
+}
+// ============ EXCEL YA NAMBA (KWA SMS) ============
+// Kundi: "wapya" = wageni ambao bado hawajapakuliwa, "wote" = wageni wote
+// Safu: jina | namba ya simu | kodi | aina
+// Baada ya kupakua, wageni waliopakuliwa wanawekewa alama (smsExported: true)
+async function downloadExcelNamba(){
+  if(!activeEventId || !activeEventData){
+    alert('Chagua tukio kwanza.');
+    return;
+  }
+
+  const kundi = document.getElementById('excelNambaKundi').value;
+
+  try{
+    const snap = await db.collection('events').doc(activeEventId)
+      .collection('guests')
+      .get();
+
+    if(snap.empty){
+      alert('Hakuna wageni kwenye tukio hili.');
+      return;
+    }
+
+    // Kusanya wageni pamoja na kumbukumbu zao (ili tuweze kuwawekea alama)
+    let orodha = [];
+    snap.forEach(doc => orodha.push({ ref: doc.ref, data: doc.data() }));
+
+    // Chuja kulingana na kundi
+    if(kundi === 'wapya'){
+      orodha = orodha.filter(x => x.data.smsExported !== true);
+    }
+
+    if(orodha.length === 0){
+      alert(kundi === 'wapya'
+        ? 'Hakuna wageni wapya. Wote washapakuliwa tayari. Chagua "Wote" kama unataka kuwapakua tena.'
+        : 'Hakuna wageni kwenye tukio hili.');
+      return;
+    }
+
+    // Panga kwa mpangilio waliongezwa
+    orodha.sort((a, b) => {
+      const ta = a.data.createdAt && a.data.createdAt.toMillis ? a.data.createdAt.toMillis() : 0;
+      const tb = b.data.createdAt && b.data.createdAt.toMillis ? b.data.createdAt.toMillis() : 0;
+      return ta - tb;
+    });
+
+    // Vichwa vya safu vinakuwa alama za SMS: [KODI] na [AINA]
+    const rows = [['jina', 'namba ya simu', 'kodi', 'aina']];
+    orodha.forEach(x => {
+      const g = x.data;
+      rows.push([
+        String(g.name || ''),
+        String(g.phone || ''),
+        String(g.namba || ''),
+        g.aina === 'double' ? 'DOUBLE' : 'SINGLE'
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 10 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Wageni');
+
+    const jinaLaKundi = kundi === 'wapya' ? 'Wapya' : 'Wote';
+    XLSX.writeFile(wb, `Namba_${sanitizeFilename(activeEventData.name)}_${jinaLaKundi}.xlsx`);
+
+    // Weka alama kwa wale ambao bado hawana (kwa vipande vya 400)
+    const wasioWekewa = orodha.filter(x => x.data.smsExported !== true);
+    for(let i = 0; i < wasioWekewa.length; i += 400){
+      const batch = db.batch();
+      wasioWekewa.slice(i, i + 400).forEach(x => {
+        batch.update(x.ref, { smsExported: true });
+      });
+      await batch.commit();
+    }
   }catch(err){
     console.error(err);
     alert('Imeshindikana kutengeneza Excel: ' + err.message);
