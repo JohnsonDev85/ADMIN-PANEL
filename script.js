@@ -170,7 +170,7 @@ function tumaWhatsApp(guestId){
     .replace(/\[KODI\]/gi, g.namba || '')
     .replace(/\[RSVP\]/gi, linkYaRsvp);
 
-  const url = 'https://wa.me/' + nambaWA + '?text=' + encodeURIComponent(ujumbe);
+  const url = 'https://api.whatsapp.com/send?phone=' + nambaWA + '&text=' + encodeURIComponent(ujumbe);
   window.open(url, '_blank');
 }
 
