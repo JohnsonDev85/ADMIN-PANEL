@@ -167,7 +167,7 @@ function tumaWhatsApp(guestId){
   ujumbe = ujumbe
     .replace(/\[JINA\]/gi, g.name || '')
     .replace(/\[TUKIO\]/gi, jinaLaTukio)
-        .replace(/\[ALIKA\]/gi, g.aina === 'double' ? 'tunawaalika' : 'tunakualika')
+        .replace(/\[ALIKA\]/gi, g.aina === 'double' ? 'kuwaalika' : 'kukualika')
     .replace(/\[KODI\]/gi, g.namba || '')
     .replace(/\[RSVP\]/gi, linkYaRsvp);
 
