@@ -1078,6 +1078,77 @@ async function downloadExcelNamba(){
   }
 }
 
+// ============ EXCEL YA MAHUDHURIO (RSVP) ============
+// Pakua Excel ya wageni kulingana na kundi: wote / yes / no / none
+// Safu: jina | namba ya simu | aina ya KADI | jibu la RSVP
+async function downloadExcelRsvp(){
+  if(!activeEventId || !activeEventData){
+    alert('Chagua tukio kwanza.');
+    return;
+  }
+
+  const kundi = document.getElementById('excelKundi').value;
+
+  try{
+    const snap = await db.collection('events').doc(activeEventId)
+      .collection('guests')
+      .get();
+
+    if(snap.empty){
+      alert('Hakuna wageni kwenye tukio hili.');
+      return;
+    }
+
+    // Kusanya wageni
+    let wageni = [];
+    snap.forEach(doc => wageni.push(doc.data()));
+
+    // Chuja kulingana na kundi
+    if(kundi === 'yes'){
+      wageni = wageni.filter(g => g.rsvp === 'yes');
+    }else if(kundi === 'no'){
+      wageni = wageni.filter(g => g.rsvp === 'no');
+    }else if(kundi === 'none'){
+      wageni = wageni.filter(g => g.rsvp !== 'yes' && g.rsvp !== 'no');
+    }
+
+    if(wageni.length === 0){
+      alert('Hakuna wageni kwenye kundi hili.');
+      return;
+    }
+
+    // Panga kwa mpangilio waliongezwa
+    wageni.sort((a, b) => {
+      const ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      const tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+      return ta - tb;
+    });
+
+    const majinaYaJibu = { yes: 'Atahudhuria', no: 'Hataweza', none: 'Hajajibu' };
+
+    const rows = [['jina', 'namba ya simu', 'aina ya KADI', 'jibu la RSVP']];
+    wageni.forEach(g => {
+      const jibuLake = (g.rsvp === 'yes' || g.rsvp === 'no') ? g.rsvp : 'none';
+      rows.push([
+        String(g.name || ''),
+        String(g.phone || ''),
+        g.aina === 'double' ? 'DOUBLE' : 'SINGLE',
+        majinaYaJibu[jibuLake]
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 16 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Mahudhurio');
+
+    const majinaYaKundi = { wote: 'Wote', yes: 'Atahudhuria', no: 'Hataweza', none: 'Hajajibu' };
+    XLSX.writeFile(wb, `Mahudhurio_${sanitizeFilename(activeEventData.name)}_${majinaYaKundi[kundi]}.xlsx`);
+  }catch(err){
+    console.error(err);
+    alert('Imeshindikana kutengeneza Excel: ' + err.message);
+  }
+}
 // ============ KUBADILISHA SEHEMU (WAGENI / MICHANGO) ============
 function badilishaSehemu(jina){
   const niWageni = (jina === 'wageni');
